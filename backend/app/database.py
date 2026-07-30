@@ -1,3 +1,5 @@
+"""Lazy database setup: nothing connects at import time."""
+
 from collections.abc import Iterator
 
 from sqlalchemy import Engine, create_engine
@@ -14,7 +16,9 @@ _SessionLocal: sessionmaker[Session] | None = None
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
-        _engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+        url = get_settings().database_url
+        connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+        _engine = create_engine(url, pool_pre_ping=True, connect_args=connect_args)
     return _engine
 
 
