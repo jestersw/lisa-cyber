@@ -1,0 +1,25 @@
+[project]
+name = "lisa-agent"
+version = "0.1.0"
+description = "LISA POSIX activity-simulation agent (Linux + macOS)"
+requires-python = ">=3.12"
+dependencies = [
+    "requests==2.32.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "ruff==0.8.4",
+]
+
+[project.scripts]
+lisa-agent = "lisa_agent.main:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
