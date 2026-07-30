@@ -8,6 +8,10 @@ updates:
     directory: /agent
     schedule:
       interval: weekly
+  - package-ecosystem: pip
+    directory: /ml
+    schedule:
+      interval: weekly
   - package-ecosystem: npm
     directory: /frontend
     schedule:
