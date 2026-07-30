@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "LISA POSIX activity-simulation agent (Linux + macOS)"
 requires-python = ">=3.12"
 dependencies = [
-    "requests==2.32.3",
+    "requests==2.34.2",
 ]
 
 [project.optional-dependencies]
