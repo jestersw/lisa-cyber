@@ -1,9 +1,12 @@
+"""LISA backend entrypoint."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.endpoints import agents, applications, heartbeat, roles, templates
 from app.config import get_settings
 from app.database import get_engine
 
@@ -18,7 +21,6 @@ async def lifespan(app: FastAPI):
 
 
 settings = get_settings()
-
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
@@ -28,6 +30,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(roles.router, prefix="/api", tags=["Roles"])
+app.include_router(templates.router, prefix="/api", tags=["Behavior templates"])
+app.include_router(applications.router, prefix="/api", tags=["Application templates"])
+app.include_router(agents.router, prefix="/api", tags=["Agents"])
+app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 
 
 @app.get("/")
