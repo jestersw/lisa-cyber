@@ -1,8 +1,3 @@
-"""LISA backend entrypoint (scaffold).
-
-Domain models, schemas and routers get ported into `app/` on top of this.
-"""
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,9 +10,7 @@ from app.database import get_engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup hooks go here (e.g. warm caches); no hard DB dependency on boot
     yield
-    # shutdown: dispose the engine if it was ever created
     from app import database
 
     if database._engine is not None:
@@ -44,7 +37,6 @@ def root() -> dict[str, str]:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    """Liveness probe. Reports DB reachability without failing the request."""
     database_status = "down"
     try:
         with get_engine().connect() as conn:
