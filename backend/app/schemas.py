@@ -1,5 +1,3 @@
-"""Pydantic v2 schemas (Windows dropped: os_type is linux | macos)."""
-
 from datetime import datetime
 from enum import Enum
 
@@ -11,7 +9,6 @@ class OSType(str, Enum):
     MACOS = "macos"
 
 
-# ---- Role ----
 class RoleBase(BaseModel):
     name: str
     description: str
@@ -36,7 +33,6 @@ class RoleResponse(RoleBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---- Behavior template ----
 class BehaviorTemplateBase(BaseModel):
     name: str
     description: str | None = None
@@ -68,7 +64,6 @@ class BehaviorTemplateResponse(BehaviorTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---- Application template ----
 class ApplicationTemplateBase(BaseModel):
     name: str
     display_name: str | None = None
@@ -104,7 +99,6 @@ class ApplicationTemplateResponse(ApplicationTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---- Agent ----
 class AgentConfig(BaseModel):
     name: str
     role_id: int
@@ -137,7 +131,6 @@ class AgentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# What the agent fetches over HTTP instead of reading the DB directly.
 class AgentConfigResponse(BaseModel):
     agent_id: str
     name: str
@@ -149,7 +142,6 @@ class AgentConfigResponse(BaseModel):
     version: str
 
 
-# ---- Heartbeat (matches the agent's build_payload) ----
 class AgentHeartbeatRequest(BaseModel):
     agent_id: str
     status: str = "active"
