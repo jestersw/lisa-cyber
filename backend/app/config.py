@@ -1,5 +1,3 @@
-"""Application settings, fully driven by environment variables."""
-
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +9,6 @@ class Settings(BaseSettings):
     app_name: str = "LISA Backend"
     debug: bool = False
 
-    # postgresql+psycopg://user:pass@host:5432/db
     database_url: str = "postgresql+psycopg://lisa:lisa@localhost:5432/lisa"
     redis_url: str = "redis://localhost:6379/0"
 
