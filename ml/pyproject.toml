@@ -1,0 +1,26 @@
+[project]
+name = "lisa-ml"
+version = "0.1.0"
+description = "LISA behavior model: learn next-activity from agent activity logs"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "ruff==0.8.4",
+]
+
+[project.scripts]
+lisa-ml-train = "lisa_ml.train:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
