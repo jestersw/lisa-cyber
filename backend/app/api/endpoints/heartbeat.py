@@ -64,7 +64,7 @@ def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
         timestamp=_utcnow(),
         message="Heartbeat processed",
         next_heartbeat_in=get_settings().heartbeat_interval_seconds,
-        commands=[],  # future: {"type": "update", ...} / {"type": "refresh_config"}
+        commands=[],
     )
 
 

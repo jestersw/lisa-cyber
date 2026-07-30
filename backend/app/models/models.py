@@ -1,9 +1,3 @@
-"""Domain models (SQLAlchemy 2.0 typed style).
-
-Ported from the original backend. Windows dropped (Linux/macOS only). The
-build/deploy/servers tables are left for a later feat/deploy branch.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
