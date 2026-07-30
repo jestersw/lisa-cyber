@@ -1,9 +1,3 @@
-"""Lazy database setup.
-
-Nothing connects at import time, so the app (and the test suite) can be
-imported without a live database. The engine is created on first use.
-"""
-
 from collections.abc import Iterator
 
 from sqlalchemy import Engine, create_engine
