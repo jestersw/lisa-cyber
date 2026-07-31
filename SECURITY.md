@@ -9,6 +9,9 @@ activity (opening apps, browsing, editing files) so that SOC analysts can train
 against a realistic background of "peaceful" activity. Everything below is
 scoped to that purpose and to an **isolated training environment**.
 
+Our goal is not an unbreakable system — that does not exist — but a system with
+no obvious, well-known classes of vulnerability (roughly, the OWASP Top 10).
+
 ## Assets we protect
 
 - **Backend credentials and agent tokens.** The token an agent uses to talk to
@@ -39,7 +42,7 @@ scoped to that purpose and to an **isolated training environment**.
   — that is now gone.
 - **Unauthenticated status/telemetry.** The agent sends its heartbeat with an
   `Authorization: Bearer` token so the backend can reject reports from unknown
-  agents. (Backend-side verification is tracked as ongoing work.)
+  agents. (Backend-side verification is tracked in the roadmap below.)
 - **A stuck or duplicated agent.** A single-instance mutex ensures only one
   agent runs per identity; a command timeout prevents a hung activity from
   wedging the agent.
@@ -55,6 +58,32 @@ emulating user activity, not attacking or defending the host):
 - **Malicious activity automation.** Agents simulate legitimate (and, optionally,
   benign-but-suspicious-looking) activity only. Automating genuinely malicious
   actions is explicitly not a goal.
+
+## Security roadmap
+
+Tracks the state of each hardening item. This is a living list.
+
+**Done**
+- Secret scanning (`gitleaks`) in pre-commit and CI.
+- All secrets moved to environment variables; none hardcoded.
+- `.env.example` documenting required configuration.
+
+**In progress**
+- Agent → backend authentication. The agent already sends a bearer token; the
+  backend needs to verify it and reject requests with a missing or invalid
+  token. (Backend + agent; needs coordination.)
+
+**Planned**
+- Operator authentication for the web panel. *Open question — not yet designed:*
+  the team still needs to decide how operators log in (e.g. username/password,
+  session vs. token). Until then the panel must not be exposed outside the
+  isolated environment.
+- Input validation on all backend endpoints: strict Pydantic schemas for every
+  request body, and parameterised queries / ORM usage to prevent SQL injection.
+- Rate limiting on public endpoints (e.g. heartbeat) to prevent flooding.
+- TLS for agent ↔ backend traffic so tokens can't be intercepted.
+- Authorization (not just authentication): decide whether operators are
+  restricted to their own agents, or share all of them.
 
 ## Practices
 
