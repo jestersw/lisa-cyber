@@ -4,7 +4,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.endpoints import agents, applications, events, heartbeat, roles, templates
+from app.api.endpoints import (
+    agents,
+    applications,
+    events,
+    generate,
+    heartbeat,
+    roles,
+    templates,
+)
 from app.config import get_settings
 from app.database import get_engine
 
@@ -35,6 +43,7 @@ app.include_router(applications.router, prefix="/api", tags=["Application templa
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 app.include_router(events.router, prefix="/api", tags=["Activity events"])
+app.include_router(generate.router, prefix="/api", tags=["Template generation"])
 
 
 @app.get("/")

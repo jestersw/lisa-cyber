@@ -1,5 +1,3 @@
-"""Application settings, fully driven by environment variables."""
-
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,15 +14,21 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # Shared secret the agent presents as `Authorization: Bearer <token>`.
-    # If unset (None), agent endpoints are open — dev only. Set in prod.
     agent_token: str | None = None
 
-    # Backend URL the agent should call back on (put in the config it fetches).
     public_base_url: str = "http://localhost:8000"
 
-    # Told to the agent so it knows how often to check in.
     heartbeat_interval_seconds: int = 86400
+
+    llm_provider: str = "ollama"
+
+    llm_base_url: str = "http://localhost:11434"
+
+    llm_model: str = "llama3.2"
+
+    llm_api_key: str | None = None
+
+    llm_timeout: float = 60.0
 
 
 @lru_cache

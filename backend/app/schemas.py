@@ -186,3 +186,23 @@ class ActivityEventResponse(ActivityEventCreate):
     id: int
     agent_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class GeneratedTemplate(BaseModel):
+    applications_used: list[str] = Field(min_length=1)
+    work_start: str = "09:00"
+    work_end: str = "18:00"
+    activities: list[str] = Field(default_factory=list)
+
+
+class TemplateGenerationRequest(BaseModel):
+    description: str
+    os_type: OSType = OSType.LINUX
+    name: str | None = None
+
+
+class TemplateGenerationResponse(BaseModel):
+    name: str
+    os_type: OSType
+    template_data: dict
+    source: str
