@@ -20,3 +20,5 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+model.json
