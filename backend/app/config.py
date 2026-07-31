@@ -15,20 +15,18 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
 
     agent_token: str | None = None
-
     public_base_url: str = "http://localhost:8000"
 
-    heartbeat_interval_seconds: int = 86400
+    ml_model_path: str = "model.json"
+    default_activity: str = "firefox"
 
     llm_provider: str = "ollama"
-
     llm_base_url: str = "http://localhost:11434"
-
     llm_model: str = "llama3.2"
-
     llm_api_key: str | None = None
-
     llm_timeout: float = 60.0
+
+    heartbeat_interval_seconds: int = 86400
 
 
 @lru_cache

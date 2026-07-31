@@ -10,6 +10,7 @@ from app.api.endpoints import (
     events,
     generate,
     heartbeat,
+    ml,
     roles,
     templates,
 )
@@ -44,6 +45,7 @@ app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 app.include_router(events.router, prefix="/api", tags=["Activity events"])
 app.include_router(generate.router, prefix="/api", tags=["Template generation"])
+app.include_router(ml.router, prefix="/api", tags=["ML inference"])
 
 
 @app.get("/")
