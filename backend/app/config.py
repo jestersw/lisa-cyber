@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     heartbeat_interval_seconds: int = 86400
 
     llm_provider: str = "ollama"
-    
+
     llm_base_url: str = "http://localhost:11434"
 
     llm_model: str = "llama3.2"
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
 
     llm_timeout: float = 60.0
+
 
 @lru_cache
 def get_settings() -> Settings:

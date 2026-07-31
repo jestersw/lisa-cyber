@@ -187,6 +187,7 @@ class ActivityEventResponse(ActivityEventCreate):
     agent_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
+
 class GeneratedTemplate(BaseModel):
     applications_used: list[str] = Field(min_length=1)
     work_start: str = "09:00"

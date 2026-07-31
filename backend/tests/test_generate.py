@@ -33,7 +33,7 @@ def test_parse_template_valid():
 
 
 def test_parse_template_strips_code_fence():
-    raw = "```json\n{\"applications_used\": [\"code\"]}\n```"
+    raw = '```json\n{"applications_used": ["code"]}\n```'
     assert parse_template(raw)["applications_used"] == ["code"]
 
 
