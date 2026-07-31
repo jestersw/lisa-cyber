@@ -56,7 +56,7 @@ def _allow(key: str, limit: int, window_seconds: int) -> bool:
         return True  # fail-open: no Redis, don't block
     try:
         redis_key = f"ratelimit:{key}"
-        count = r.incr(redis_key)
+        count = int(r.incr(redis_key))
         if count == 1:
             r.expire(redis_key, window_seconds)
         return count <= limit
