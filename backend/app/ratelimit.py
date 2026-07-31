@@ -13,6 +13,7 @@ point of failure that takes down heartbeats for every agent when Redis is down.
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import redis
 from fastapi import Header, HTTPException, Request
@@ -56,7 +57,7 @@ def _allow(key: str, limit: int, window_seconds: int) -> bool:
         return True  # fail-open: no Redis, don't block
     try:
         redis_key = f"ratelimit:{key}"
-        count = int(r.incr(redis_key))
+        count = cast(int, r.incr(redis_key))
         if count == 1:
             r.expire(redis_key, window_seconds)
         return count <= limit
