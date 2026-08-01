@@ -26,16 +26,7 @@ def _utcnow() -> datetime:
 def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == hb.agent_id).first()
     if not agent:
-        agent = Agent(
-            agent_id=hb.agent_id,
-            name=hb.system_info.get("hostname", hb.agent_id),
-            status=hb.status,
-            os_type=hb.system_info.get("platform", "unknown"),
-            config={},
-        )
-        db.add(agent)
-        db.commit()
-        db.refresh(agent)
+        raise HTTPException(status_code=404, detail="Agent not found")
 
     agent.status = hb.status
     agent.last_seen = _utcnow()
