@@ -95,3 +95,53 @@ def parse_template(raw: str) -> dict | None:
         return GeneratedTemplate(**obj).model_dump()
     except (ValidationError, TypeError):
         return None
+
+
+def build_plugin_prompt(name: str, os_type: str, description: str | None = None) -> str:
+    hint = f" Extra context: {description}." if description else ""
+    return (
+        "You generate application plugins for LISA, a cyber-range activity simulator. "
+        "A plugin describes how a simulated user installs, opens and uses one application. "
+        f"Target application: {name}. Target OS: {os_type}.{hint} "
+        "Return ONLY a JSON object with these keys: "
+        "app_info (name, display_name, category), "
+        "installation (check_command, install_method, install_commands array, "
+        "post_install_commands array, dependencies array), "
+        "execution (open_command, close_command, window_class, startup_delay seconds), "
+        "activities (array of objects with id, name, weight, min_duration, max_duration, "
+        "and commands array), "
+        "settings (usage_probability, work_hours_only). "
+        "Each command object has type set to one of key, key_combination or type_text, "
+        "a delay in seconds, and then key for key, keys for key_combination, "
+        "or text for type_text. "
+        "Give at least two realistic activities with weights that sum to about 100. "
+        "Use real commands for the target OS. Do not add keys beyond those listed."
+    )
+
+
+def parse_plugin(raw: str) -> dict | None:
+    from pydantic import ValidationError
+
+    from app.schemas import ApplicationPlugin
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        obj = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    try:
+        return ApplicationPlugin(**obj).model_dump(exclude_none=True)
+    except (ValidationError, TypeError):
+        return None
+
+
+def generate_plugin(name: str, os_type: str, description: str | None = None) -> dict | None:
+    try:
+        raw = get_provider().generate(build_plugin_prompt(name, os_type, description))
+    except LLMError:
+        return None
+    return parse_plugin(raw)

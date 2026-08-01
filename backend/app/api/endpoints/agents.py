@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.defaults import build_agent_config
+from app.llm import generate_plugin
 from app.models.models import (
     Agent,
     AgentActivity,
@@ -178,6 +179,24 @@ def get_agent_config(agent_id: str, db: Session = Depends(get_db)):
         )
         if plugin:
             plugins[name] = plugin.template_config
+            continue
+
+        generated = generate_plugin(name, agent.os_type)
+        if generated is None:
+            continue
+
+        db.add(
+            ApplicationTemplate(
+                name=name,
+                display_name=generated.get("app_info", {}).get("display_name"),
+                category=generated.get("app_info", {}).get("category"),
+                template_config=generated,
+                os_type=agent.os_type,
+                author="llm",
+            )
+        )
+        db.commit()
+        plugins[name] = generated
 
     return DeploymentPackage(
         agent_config=AgentConfigSpec(**agent_config),

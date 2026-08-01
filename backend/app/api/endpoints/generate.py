@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
-from app.llm import LLMError, build_prompt, get_provider, parse_template
-from app.schemas import TemplateGenerationRequest, TemplateGenerationResponse
+from app.llm import LLMError, build_prompt, generate_plugin, get_provider, parse_template
+from app.schemas import (
+    PluginGenerationRequest,
+    PluginGenerationResponse,
+    TemplateGenerationRequest,
+    TemplateGenerationResponse,
+)
 
 router = APIRouter()
 
@@ -22,5 +27,21 @@ def generate_template(req: TemplateGenerationRequest):
         name=req.name or f"{req.description[:40]} (draft)",
         os_type=req.os_type,
         template_data=template_data,
+        source="llm",
+    )
+
+
+@router.post("/application-templates/generate", response_model=PluginGenerationResponse)
+def generate_application_plugin(req: PluginGenerationRequest):
+    plugin = generate_plugin(req.name, req.os_type.value, req.description)
+    if plugin is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Model returned invalid plugin JSON or the provider is unavailable",
+        )
+    return PluginGenerationResponse(
+        name=req.name,
+        os_type=req.os_type,
+        template_config=plugin,
         source="llm",
     )

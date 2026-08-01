@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -261,3 +262,67 @@ class AgentConfigSpec(BaseModel):
 class DeploymentPackage(BaseModel):
     agent_config: AgentConfigSpec
     application_plugins: dict[str, dict]
+
+
+class PluginAppInfo(BaseModel):
+    name: str
+    display_name: str | None = None
+    category: str | None = None
+
+
+class PluginInstallation(BaseModel):
+    check_command: str | None = None
+    install_method: str | None = None
+    install_commands: list[str] = Field(default_factory=list)
+    post_install_commands: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class PluginExecution(BaseModel):
+    open_command: str
+    close_command: str | None = None
+    window_class: str | None = None
+    startup_delay: float = 0
+
+
+class PluginCommand(BaseModel):
+    type: Literal["key", "key_combination", "type_text"]
+    delay: float = 0
+    key: str | None = None
+    keys: str | None = None
+    text: str | None = None
+
+
+class PluginActivity(BaseModel):
+    id: str
+    name: str
+    weight: int = 1
+    min_duration: float = 0
+    max_duration: float = 0
+    commands: list[PluginCommand] = Field(default_factory=list)
+
+
+class PluginSettings(BaseModel):
+    usage_probability: float = 1.0
+    work_hours_only: bool = True
+
+
+class ApplicationPlugin(BaseModel):
+    app_info: PluginAppInfo
+    installation: PluginInstallation = Field(default_factory=PluginInstallation)
+    execution: PluginExecution
+    activities: list[PluginActivity] = Field(min_length=1)
+    settings: PluginSettings = Field(default_factory=PluginSettings)
+
+
+class PluginGenerationRequest(BaseModel):
+    name: str
+    os_type: OSType = OSType.LINUX
+    description: str | None = None
+
+
+class PluginGenerationResponse(BaseModel):
+    name: str
+    os_type: OSType
+    template_config: dict
+    source: str
