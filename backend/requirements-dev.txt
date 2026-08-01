@@ -3,5 +3,4 @@ httpx==0.28.1
 ruff==0.8.4
 mypy==1.14.0
 fakeredis==2.26.2
-fakeredis==2.26.2
 types-redis==4.6.0.20241004

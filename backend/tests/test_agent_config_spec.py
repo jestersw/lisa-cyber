@@ -26,7 +26,11 @@ def test_build_agent_config_shape():
 
 def test_build_agent_config_overrides():
     cfg = build_agent_config(
-        "USR1", "J", "admin", "windows", ["x"],
+        "USR1",
+        "J",
+        "admin",
+        "windows",
+        ["x"],
         overrides={"heartbeat_interval_minutes": 5, "schedule": {"custom": True}},
     )
     assert cfg["heartbeat"]["interval_minutes"] == 5
