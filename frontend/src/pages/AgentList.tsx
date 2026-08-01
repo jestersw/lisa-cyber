@@ -50,7 +50,9 @@ export function AgentList() {
           <tbody>
             {agents.map((agent) => (
               <tr key={agent.agent_id}>
-                <td>{agent.name}</td>
+                <td>
+                  <Link to={`/agents/${agent.agent_id}`}>{agent.name}</Link>
+                </td>
                 <td>{agent.agent_id}</td>
                 <td>{agent.os_type}</td>
                 <td>

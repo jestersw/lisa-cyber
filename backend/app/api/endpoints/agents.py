@@ -132,7 +132,9 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             "name": agent.name,
             "status": agent.status,
             "os_type": agent.os_type,
-            "role": agent.role.name if agent.role else None,
+            "role": agent.role.name
+            if agent.role
+            else (agent.config or {}).get("agent_info", {}).get("role"),
             "template": agent.template.name if agent.template else None,
             "last_seen": agent.last_seen,
         },

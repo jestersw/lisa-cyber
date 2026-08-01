@@ -87,11 +87,64 @@ export interface GenerateAgentResponse {
   status_url: string;
 }
 
+
+export interface AgentStatus {
+  agent: {
+    agent_id: string;
+    name: string;
+    status: string;
+    os_type: string;
+    role: string | null;
+    last_seen: string | null;
+  };
+  recent_activities: {
+    id: number;
+    type: string;
+    data: Record<string, unknown> | null;
+    timestamp: string;
+  }[];
+}
+
+export interface HeartbeatLog {
+  agent_id: string;
+  status: string;
+  last_seen: string | null;
+  heartbeats: { timestamp: string; data: Record<string, unknown> | null }[];
+}
+
+export interface DeploymentPackage {
+  agent_config: {
+    agent_info: { agent_id: string; name: string; role: string; os_type: string };
+    schedule: {
+      workdays: number[];
+      work_start: string;
+      work_end: string;
+      lunch: { earliest: string; latest: string; min_minutes: number; max_minutes: number };
+    };
+    behavior: Record<string, { min: number; max: number }>;
+    heartbeat: { interval_minutes: number };
+    applications: string[];
+  };
+  application_plugins: Record<string, unknown>;
+}
+
+export interface NextActivity {
+  agent_id: string;
+  current: string | null;
+  next_activity: string;
+  activity_type: string;
+  source: string;
+}
+
 export const endpoints = {
   roles: () => api.get<Role[]>("/api/roles"),
   behaviorTemplates: () => api.get<BehaviorTemplate[]>("/api/behavior-templates"),
   applicationTemplates: () => api.get<ApplicationTemplate[]>("/api/application-templates"),
   agents: () => api.get<Agent[]>("/api/agents"),
+  agentStatus: (agentId: string) => api.get<AgentStatus>(`/api/agents/${agentId}/status`),
+  agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),
+  agentConfig: (agentId: string) => api.get<DeploymentPackage>(`/api/agents/${agentId}/config`),
+  nextActivity: (agentId: string) => api.get<NextActivity>(`/api/agents/${agentId}/next-activity`),
   generateAgent: (body: Record<string, unknown>) =>
     api.post<GenerateAgentResponse>("/api/agents/generate", body),
   generateTemplate: (body: Record<string, unknown>) =>
