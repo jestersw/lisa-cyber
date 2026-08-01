@@ -40,7 +40,7 @@ class Config:
     backend_url: str = "http://localhost:8000"
     # Auth token for talking to the backend. Never hardcode - read from env.
     auth_token: str | None = None
-    heartbeat_interval_hours: int = 24
+    heartbeat_interval_minutes: int = 30
     schedule: WorkSchedule = field(default_factory=WorkSchedule)
 
     @classmethod
@@ -48,7 +48,7 @@ class Config:
         return cls(
             backend_url=os.environ.get("LISA_BACKEND_URL", "http://localhost:8000"),
             auth_token=os.environ.get("LISA_AGENT_TOKEN"),
-            heartbeat_interval_hours=_int("LISA_HEARTBEAT_INTERVAL_HOURS", 24),
+            heartbeat_interval_minutes=_int("LISA_HEARTBEAT_INTERVAL_MINUTES", 30),
             schedule=WorkSchedule(
                 start=os.environ.get("LISA_WORK_START", "09:00"),
                 end=os.environ.get("LISA_WORK_END", "18:00"),
