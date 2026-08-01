@@ -102,8 +102,9 @@ class ApplicationTemplateResponse(ApplicationTemplateBase):
 
 class AgentConfig(BaseModel):
     name: str
-    role_id: int
-    template_id: int
+    role: str | None = None
+    role_id: int | None = None
+    template_id: int | None = None
     os_type: OSType
     injection_target: str | None = None
     custom_config: dict = Field(default_factory=dict)

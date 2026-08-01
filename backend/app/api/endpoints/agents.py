@@ -27,25 +27,36 @@ router = APIRouter()
 
 @router.post("/agents/generate", response_model=AgentGenerateResponse)
 def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
-    role = db.query(Role).filter(Role.id == config.role_id, Role.is_active.is_(True)).first()
-    if not role:
-        raise HTTPException(status_code=404, detail="Role not found")
-    template = (
-        db.query(BehaviorTemplate)
-        .filter(BehaviorTemplate.id == config.template_id, BehaviorTemplate.is_active.is_(True))
-        .first()
-    )
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    if template.os_type != config.os_type.value:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Template OS ({template.os_type}) != requested OS ({config.os_type.value})",
+    role = None
+    if config.role_id is not None:
+        role = db.query(Role).filter(Role.id == config.role_id, Role.is_active.is_(True)).first()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+
+    role_name = config.role or (role.name if role else None)
+    if not role_name:
+        raise HTTPException(status_code=400, detail="role or role_id is required")
+
+    template = None
+    if config.template_id is not None:
+        template = (
+            db.query(BehaviorTemplate)
+            .filter(BehaviorTemplate.id == config.template_id, BehaviorTemplate.is_active.is_(True))
+            .first()
         )
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        if template.os_type != config.os_type.value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Template OS ({template.os_type}) != requested OS ({config.os_type.value})",
+            )
 
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
     applications = config.applications or (
-        template.template_data.get("applications_used", []) if template.template_data else []
+        template.template_data.get("applications_used", [])
+        if template and template.template_data
+        else []
     )
     overrides = {
         "schedule": config.schedule,
@@ -53,7 +64,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         "heartbeat_interval_minutes": config.heartbeat_interval_minutes,
     }
     agent_config = build_agent_config(
-        agent_id, config.name, role.name, config.os_type.value, applications, overrides
+        agent_id, config.name, role_name, config.os_type.value, applications, overrides
     )
     db_agent = Agent(
         agent_id=agent_id,
@@ -76,7 +87,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
             "agent_id": agent_id,
             "name": config.name,
             "os_type": config.os_type.value,
-            "role": role.name,
+            "role": role_name,
             "template_id": config.template_id,
         },
         config_url=f"/api/agents/{agent_id}/config",
