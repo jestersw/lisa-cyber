@@ -1,0 +1,33 @@
+/* Design tokens — extracted from docs/design/panel-mockup.html.
+   Shared across all panel components so the UI has one visual language. */
+
+:root {
+  /* ── Colour palette ── */
+  --bg: #0D0F0C;
+  --deep: #122538;
+  --mid: #03365B;
+  --accent: #01669C;
+  --light: #9BBACD;
+  --white: #F2F7FA;
+
+  /* ── Typography ── */
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-pixel: "Nine By Five NBP", "JetBrains Mono", monospace;
+
+  /* ── Radii ── */
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+
+  /* ── Effects ── */
+  --nav-blur: blur(6px);
+  --accent-glow: 0 0 10px var(--accent);
+
+  /* ── Spacing ── */
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --page-pad: 36px;
+}
