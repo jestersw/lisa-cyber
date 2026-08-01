@@ -20,7 +20,18 @@ services:
     ports:
       - "6379:6379"
 
+  migrate:
+    image: lisa-backend:local
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
+    image: lisa-backend:local
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
@@ -31,6 +42,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build: ./frontend
