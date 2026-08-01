@@ -1,19 +1,24 @@
-"""Agent lifecycle + the HTTP config endpoint the agent pulls instead of hitting the DB."""
-
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.database import get_db
-from app.models.models import Agent, AgentActivity, BehaviorTemplate, Role
+from app.defaults import build_agent_config
+from app.models.models import (
+    Agent,
+    AgentActivity,
+    ApplicationTemplate,
+    BehaviorTemplate,
+    Role,
+)
 from app.schemas import (
     AgentConfig,
-    AgentConfigResponse,
+    AgentConfigSpec,
     AgentGenerateResponse,
     AgentResponse,
+    DeploymentPackage,
 )
 from app.security import require_agent_token
 
@@ -39,6 +44,17 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         )
 
     agent_id = f"USR{str(uuid.uuid4().int)[:7]}"
+    applications = config.applications or (
+        template.template_data.get("applications_used", []) if template.template_data else []
+    )
+    overrides = {
+        "schedule": config.schedule,
+        "behavior": config.behavior,
+        "heartbeat_interval_minutes": config.heartbeat_interval_minutes,
+    }
+    agent_config = build_agent_config(
+        agent_id, config.name, role.name, config.os_type.value, applications, overrides
+    )
     db_agent = Agent(
         agent_id=agent_id,
         name=config.name,
@@ -46,7 +62,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
         template_id=config.template_id,
         os_type=config.os_type.value,
         injection_target=config.injection_target,
-        config=config.custom_config,
+        config=agent_config,
         status="configured",
     )
     db.add(db_agent)
@@ -118,26 +134,39 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
 
 @router.get(
     "/agents/{agent_id}/config",
-    response_model=AgentConfigResponse,
+    response_model=DeploymentPackage,
     dependencies=[Depends(require_agent_token)],
 )
 def get_agent_config(agent_id: str, db: Session = Depends(get_db)):
-    """The agent pulls its role + behavior template over HTTP (no DB access on the agent)."""
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    settings = get_settings()
-    return AgentConfigResponse(
-        agent_id=agent.agent_id,
-        name=agent.name,
-        os_type=agent.os_type,
-        role={
-            "name": agent.role.name if agent.role else None,
-            "description": agent.role.description if agent.role else None,
-            "category": agent.role.category if agent.role else None,
-        },
-        behavior_template=agent.template.template_data if agent.template else {},
-        server_url=settings.public_base_url,
-        heartbeat_interval=settings.heartbeat_interval_seconds,
-        version="1.0",
+
+    stored = agent.config or {}
+    if "agent_info" in stored:
+        agent_config = stored
+    else:
+        apps = (
+            agent.template.template_data.get("applications_used", [])
+            if agent.template and agent.template.template_data
+            else []
+        )
+        role_name = agent.role.name if agent.role else "user"
+        agent_config = build_agent_config(
+            agent.agent_id, agent.name, role_name, agent.os_type, apps
+        )
+
+    plugins: dict[str, dict] = {}
+    for name in agent_config.get("applications", []):
+        plugin = (
+            db.query(ApplicationTemplate)
+            .filter(ApplicationTemplate.name == name, ApplicationTemplate.is_active.is_(True))
+            .first()
+        )
+        if plugin:
+            plugins[name] = plugin.template_config
+
+    return DeploymentPackage(
+        agent_config=AgentConfigSpec(**agent_config),
+        application_plugins=plugins,
     )

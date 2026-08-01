@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class OSType(str, Enum):
     LINUX = "linux"
     MACOS = "macos"
+    WINDOWS = "windows"
 
 
 class RoleBase(BaseModel):
@@ -106,6 +107,10 @@ class AgentConfig(BaseModel):
     os_type: OSType
     injection_target: str | None = None
     custom_config: dict = Field(default_factory=dict)
+    schedule: dict | None = None
+    behavior: dict | None = None
+    heartbeat_interval_minutes: int | None = None
+    applications: list[str] | None = None
 
 
 class AgentGenerateResponse(BaseModel):
@@ -206,3 +211,52 @@ class TemplateGenerationResponse(BaseModel):
     os_type: OSType
     template_data: dict
     source: str
+
+
+class TimeRange(BaseModel):
+    min: int
+    max: int
+
+
+class LunchWindow(BaseModel):
+    earliest: str = "13:00"
+    latest: str = "15:00"
+    min_minutes: int = 45
+    max_minutes: int = 75
+
+
+class ScheduleSpec(BaseModel):
+    workdays: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
+    work_start: str
+    work_end: str
+    lunch: LunchWindow = Field(default_factory=LunchWindow)
+
+
+class BehaviorSpec(BaseModel):
+    session_duration: TimeRange
+    app_switch_pause: TimeRange
+    inactive_period: TimeRange
+
+
+class HeartbeatSpec(BaseModel):
+    interval_minutes: int = 30
+
+
+class AgentInfo(BaseModel):
+    agent_id: str
+    name: str
+    role: str
+    os_type: OSType
+
+
+class AgentConfigSpec(BaseModel):
+    agent_info: AgentInfo
+    schedule: ScheduleSpec
+    behavior: BehaviorSpec
+    heartbeat: HeartbeatSpec
+    applications: list[str]
+
+
+class DeploymentPackage(BaseModel):
+    agent_config: AgentConfigSpec
+    application_plugins: dict[str, dict]
