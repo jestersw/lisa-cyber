@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { endpoints, type Agent } from "../api/client";
+import { usePolling } from "../hooks/usePolling";
+
+const REFRESH_MS = 30_000;
 
 function formatSeen(value: string | null): string {
   if (!value) {
@@ -10,17 +12,8 @@ function formatSeen(value: string | null): string {
 }
 
 export function AgentList() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    endpoints
-      .agents()
-      .then(setAgents)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, error, loading } = usePolling<Agent[]>(endpoints.agents, REFRESH_MS);
+  const agents = data ?? [];
 
   return (
     <main className="page">
