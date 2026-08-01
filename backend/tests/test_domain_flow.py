@@ -56,9 +56,24 @@ def test_full_agent_flow(client):
     assert bad.status_code == 400
 
 
-def test_heartbeat_upserts_agent(client):
+def test_heartbeat_updates_known_agent(client):
+    rid = _make_role(client).json()["id"]
+    tid = client.post(
+        "/api/behavior-templates",
+        json={
+            "name": "Dev behavior",
+            "role_id": rid,
+            "template_data": {"applications_used": ["code"]},
+            "os_type": "linux",
+        },
+    ).json()["id"]
+    agent_id = client.post(
+        "/api/agents/generate",
+        json={"name": "A1", "role_id": rid, "template_id": tid, "os_type": "linux"},
+    ).json()["agent_id"]
+
     payload = {
-        "agent_id": "USR0000001",
+        "agent_id": agent_id,
         "status": "active",
         "system_info": {"hostname": "vm1", "platform": "Linux-6"},
         "current_activity": {"application": "firefox"},
@@ -67,6 +82,18 @@ def test_heartbeat_upserts_agent(client):
     hb = client.post("/api/agents/heartbeat", json=payload)
     assert hb.status_code == 200
     assert hb.json()["status"] == "received"
-    # agent auto-created and now listed
-    agents = client.get("/api/agents").json()
-    assert any(a["agent_id"] == "USR0000001" for a in agents)
+
+    listed = client.get("/api/agents").json()
+    match = [a for a in listed if a["agent_id"] == agent_id]
+    assert match and match[0]["status"] == "active"
+
+
+def test_heartbeat_unknown_agent_is_rejected(client):
+    payload = {
+        "agent_id": "USR0000404",
+        "status": "active",
+        "system_info": {"hostname": "ghost", "platform": "Linux-6"},
+    }
+    resp = client.post("/api/agents/heartbeat", json=payload)
+    assert resp.status_code == 404
+    assert client.get("/api/agents").json() == []
