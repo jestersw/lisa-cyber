@@ -8,32 +8,51 @@ others.
 Fail-open: if Redis is unavailable, requests are allowed through rather than
 rejected. Rate limiting protects against abuse; it must not become a single
 point of failure that takes down heartbeats for every agent when Redis is down.
+
+The `redis` package itself is treated as optional: if it isn't installed, this
+module still imports and every request is allowed through. That way a missing
+optional dependency doesn't take down the whole FastAPI app.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import cast
+from typing import Any, cast
 
-import redis
 from fastapi import Header, HTTPException, Request
 
 from app.config import get_settings
 
 log = logging.getLogger("lisa.ratelimit")
 
-_redis: redis.Redis | None = None
+# Optional dependency: if `redis` isn't installed, fall back to fail-open for
+# every request instead of crashing the whole app at import time.
+try:
+    import redis as _redis_module
+
+    _REDIS_ERRORS: tuple[type[BaseException], ...] = (_redis_module.RedisError, OSError)
+except ImportError:
+    _redis_module = None  # type: ignore[assignment]
+    _REDIS_ERRORS = (OSError,)
+    log.warning("redis package not installed; rate limiting will fail open")
+
+_redis: Any = None
 
 
-def get_redis() -> redis.Redis | None:
-    """Lazily create a Redis client. Returns None if it can't be reached."""
+def get_redis() -> Any:
+    """Lazily create a Redis client. Returns None if it can't be reached or if
+    the `redis` package isn't installed."""
     global _redis
+    if _redis_module is None:
+        return None
     if _redis is None:
         try:
-            _redis = redis.Redis.from_url(
-                get_settings().redis_url, socket_connect_timeout=1, socket_timeout=1
+            _redis = _redis_module.Redis.from_url(
+                get_settings().redis_url,
+                socket_connect_timeout=1,
+                socket_timeout=1,
             )
-        except (redis.RedisError, OSError) as exc:
+        except _REDIS_ERRORS as exc:
             log.warning("Redis unavailable for rate limiting: %s", exc)
             return None
     return _redis
@@ -54,14 +73,14 @@ def _allow(key: str, limit: int, window_seconds: int) -> bool:
     """
     r = get_redis()
     if r is None:
-        return True  # fail-open: no Redis, don't block
+        return True  # fail-open: no Redis (or no redis package), don't block
     try:
         redis_key = f"ratelimit:{key}"
         count = cast(int, r.incr(redis_key))
         if count == 1:
             r.expire(redis_key, window_seconds)
         return count <= limit
-    except (redis.RedisError, OSError) as exc:
+    except _REDIS_ERRORS as exc:
         log.warning("Rate limit check failed, allowing request: %s", exc)
         return True  # fail-open on any Redis error
 
