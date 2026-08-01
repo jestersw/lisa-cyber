@@ -46,7 +46,7 @@ def test_full_agent_flow(client):
     # agent fetches its config over HTTP (no DB access on the agent side)
     cfg = client.get(f"/api/agents/{agent_id}/config")
     assert cfg.status_code == 200
-    assert cfg.json()["behavior_template"]["applications_used"] == ["code", "firefox"]
+    assert cfg.json()["agent_config"]["applications"] == ["code", "firefox"]
 
     # os mismatch is rejected
     bad = client.post(
