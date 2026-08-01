@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Living Infrastructure Simulator Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Nine By Five NBP ──────────────────────────────────────────────
+     Pixel font for the "decoded" text. Download nine0.ttf (Creative
+     Commons, by Nate Halley), drop it next to this file. Until then it
+     falls back to JetBrains Mono and the page still works. */
+  @font-face {
+    font-family:"Nine By Five NBP";
+    src:url("NineByFiveNBP.woff2") format("woff2"), url("nine0.ttf") format("truetype");
+    font-display:swap;
+  }
+  :root {
+    --bg:#0D0F0C; --deep:#122538; --mid:#03365B; --accent:#01669C;
+    --light:#9BBACD; --white:#F2F7FA;
+    --mono:"JetBrains Mono", ui-monospace, monospace;
+    --pixel:"Nine By Five NBP", "JetBrains Mono", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--white); font-family:var(--mono); font-weight:300; line-height:1.7; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  a { color:inherit; text-decoration:none; }
+
+  /* ── Nav ── */
+  nav { position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; justify-content:space-between; padding:22px 36px; backdrop-filter:blur(6px); background:linear-gradient(to bottom, rgba(13,15,12,0.75), rgba(13,15,12,0)); }
+  .wordmark { display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; letter-spacing:0.04em; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .nav-links { display:flex; align-items:center; gap:24px; font-size:13px; color:var(--light); }
+  .nav-links a:hover { color:var(--white); }
+  .signup { color:var(--bg)!important; background:var(--light); padding:8px 18px; border-radius:20px; font-weight:500; transition:background .2s; }
+  .signup:hover { background:var(--white); }
+
+  /* ── Hero (CRT screen) ── */
+  .hero {
+    position:relative; min-height:100vh; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:120px 24px 80px;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(1,102,156,0.35) 0%, rgba(1,102,156,0) 55%),
+      radial-gradient(circle at 80% 85%, rgba(3,54,91,0.7) 0%, rgba(3,54,91,0) 55%),
+      var(--bg);
+    animation:crtBreathe 5s ease-in-out infinite;
+  }
+  @keyframes crtBreathe { 0%,100%{filter:brightness(1) contrast(1)} 50%{filter:brightness(1.06) contrast(1.05)} }
+  .stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; perspective:1100px; z-index:1; }
+  .drum { position:relative; width:260px; height:520px; transform-style:preserve-3d; animation:spin 26s linear infinite, hshift 0.2s steps(2) infinite; }
+  @keyframes spin { from{transform:rotateY(0)} to{transform:rotateY(360deg)} }
+  @keyframes hshift { 0%,92%{margin-left:0} 94%{margin-left:-3px} 96%{margin-left:4px} 98%{margin-left:-2px} 100%{margin-left:0} }
+  .panel { position:absolute; top:0; left:0; width:260px; height:520px; display:flex; flex-direction:column; justify-content:center; gap:2px; padding:10px 14px; backface-visibility:hidden; font-size:12.5px; line-height:1.5; white-space:nowrap; overflow:hidden; color:var(--accent); text-shadow:0 0 6px rgba(1,102,156,0.5); }
+  .panel .row { transition:opacity .15s; }
+  .panel .hot { color:var(--light); text-shadow:0 0 8px rgba(155,186,205,0.7); }
+  .panel .off { opacity:0.12; }
+  .hero::after { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:radial-gradient(ellipse 55% 60% at 50% 50%, rgba(13,15,12,0) 30%, var(--bg) 82%); }
+  .scanlines { position:absolute; inset:0; z-index:3; pointer-events:none; background:repeating-linear-gradient(to bottom, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px); mix-blend-mode:multiply; }
+  #noise { position:absolute; inset:0; width:100%; height:100%; z-index:4; pointer-events:none; opacity:0.10; mix-blend-mode:screen; image-rendering:pixelated; }
+  .roll { position:absolute; left:0; right:0; height:140px; z-index:4; pointer-events:none; background:linear-gradient(to bottom, transparent, rgba(155,186,205,0.06), transparent); animation:roll 6.5s linear infinite; }
+  @keyframes roll { from{top:-140px} to{top:100%} }
+  .flick { position:absolute; inset:0; z-index:5; pointer-events:none; background:rgba(155,186,205,0.025); animation:flick 0.14s steps(3) infinite; }
+  @keyframes flick { 0%{opacity:.2} 33%{opacity:.65} 66%{opacity:.1} 100%{opacity:.45} }
+
+  .hero-inner { position:relative; z-index:6; max-width:760px; }
+  .eyebrow { font-size:12px; letter-spacing:0.32em; text-transform:uppercase; color:var(--light); margin-bottom:26px; }
+  .hero h1 { font-size:clamp(30px,6vw,58px); font-weight:700; line-height:1.08; color:var(--white); letter-spacing:-0.01em; text-shadow:0 2px 30px rgba(13,15,12,0.9); }
+  .decoded { font-family:var(--pixel); margin-top:26px; font-size:clamp(13px,2.2vw,17px); letter-spacing:0.06em; color:var(--light); min-height:1.6em; animation:flicker 3.6s steps(1) infinite; }
+  @keyframes flicker { 0%,100%{opacity:1} 3%{opacity:.4} 6%{opacity:1} 52%{opacity:1} 54%{opacity:.55} 56%{opacity:1} }
+  .enter { display:inline-flex; align-items:center; gap:8px; margin-top:38px; padding:12px 28px; border:1px solid rgba(155,186,205,0.4); border-radius:24px; font-size:14px; color:var(--white); transition:border-color .2s, background .2s; }
+  .enter:hover { border-color:var(--accent); background:rgba(1,102,156,0.15); }
+  .enter .arw { transition:transform .2s; }
+  .enter:hover .arw { transform:translateX(4px); }
+
+  /* ── Sections ── */
+  section.block { max-width:900px; margin:0 auto; padding:96px 36px; border-top:1px solid rgba(155,186,205,0.12); }
+  .sec-head { font-family:var(--pixel); font-size:13px; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent); margin-bottom:28px; }
+  .block h2 { font-size:clamp(22px,3.4vw,34px); font-weight:500; line-height:1.25; max-width:26ch; }
+  .block p { color:var(--light); font-size:16px; margin-top:20px; max-width:64ch; }
+  .block p a { color:var(--white); border-bottom:1px solid var(--accent); }
+
+  /* Projects grid with grainy thumbnails */
+  .intro { color:var(--light); font-size:15px; margin-top:16px; max-width:60ch; }
+  .proj-grid { margin-top:40px; display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); }
+  .proj { position:relative; border:1px solid rgba(155,186,205,0.14); border-radius:10px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; transition:border-color .25s, transform .25s; }
+  .proj:hover { border-color:rgba(155,186,205,0.4); transform:translateY(-2px); }
+  .thumb { position:relative; aspect-ratio:16/9; overflow:hidden; }
+  .thumb svg { width:100%; height:100%; display:block; }
+  .thumb::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse 90% 90% at 50% 40%, rgba(13,15,12,0) 40%, rgba(13,15,12,0.85) 100%); }
+  .pinfo { padding:16px 16px 20px; }
+  .plabel { font-size:13px; letter-spacing:0.1em; text-transform:uppercase; color:var(--white); font-weight:500; }
+  .pdesc { font-size:13px; color:var(--light); margin-top:8px; line-height:1.55; }
+  .proj.planned { border-color:var(--accent); }
+  .badge { position:absolute; top:12px; left:12px; z-index:2; font-family:var(--pixel); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--bg); background:var(--accent); padding:5px 10px; border-radius:4px; }
+  .badge.repo { left:auto; right:12px; color:var(--white); background:rgba(13,15,12,0.7); border:1px solid rgba(155,186,205,0.4); }
+
+  .contact-lines { margin-top:24px; display:flex; flex-direction:column; gap:12px; font-size:15px; color:var(--light); }
+  .contact-lines b { color:var(--white); font-weight:500; }
+  footer { max-width:900px; margin:0 auto; padding:40px 36px 70px; border-top:1px solid rgba(155,186,205,0.12); display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; font-size:12px; color:rgba(155,186,205,0.6); }
+
+  @media (prefers-reduced-motion:reduce) { .drum,.decoded,.dot,.roll,.flick,.hero{animation:none!important} #noise{opacity:0.06} html{scroll-behavior:auto} }
+  @media (max-width:600px) {
+    nav{padding:16px 20px} .nav-links{gap:14px} .nav-links a.explore{display:none} section.block{padding:72px 24px}
+    .drum,.panel{width:190px} .drum{height:420px} .panel{height:420px; font-size:11px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wordmark"><span class="dot"></span>Living Infrastructure Simulator Agent</div>
+  <div class="nav-links">
+    <a class="explore" href="#about">Explore</a>
+    <a href="#contact">Log in</a>
+    <a class="signup" href="#contact">Sign up</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="stage"><div class="drum" id="drum"></div></div>
+  <div class="scanlines"></div>
+  <canvas id="noise"></canvas>
+  <div class="roll"></div>
+  <div class="flick"></div>
+  <div class="hero-inner">
+    <div class="eyebrow">An independent simulation lab</div>
+    <h1>Living Infrastructure<br>Simulator Agent</h1>
+    <div class="decoded" data-decode="Simulating lifelike user activity inside isolated cyber-range infrastructure.">&nbsp;</div>
+    <a class="enter" href="#about">Enter <span class="arw">→</span></a>
+  </div>
+</header>
+
+<section class="block" id="about">
+  <div class="sec-head" data-decode-head>About</div>
+  <h2>We build agents that behave like real people — so defenders can train against the real thing.</h2>
+  <p>LISA simulates realistic user behavior inside an isolated cyber-range training infrastructure. It generates a believable background of everyday, "peaceful" activity, so security teams can practice threat detection and incident analysis in conditions close to the real world. Our multi-platform agents run on Linux and Windows and operate entirely in memory — no disk footprint, process masquerading, and graceful cleanup — with loosely coupled, well-documented components. Open source, MIT-licensed.</p>
+</section>
+
+<section class="block" id="projects">
+  <div class="sec-head" data-decode-head>Projects</div>
+  <h2>What we're building on GitHub.</h2>
+  <p class="intro">A small but growing set of open-source repositories under the LISA organization.</p>
+  <div class="proj-grid" id="projGrid"></div>
+</section>
+
+<section class="block" id="careers">
+  <div class="sec-head" data-decode-head>Careers</div>
+  <h2>We're a lean, self-funded, distributed team and we're always hiring.</h2>
+  <p>Help us build and explore new infrastructure to amplify the human spirit. <a href="https://www.midjourney.com/careers">Learn more.</a></p>
+</section>
+
+<section class="block" id="contact">
+  <div class="sec-head" data-decode-head>Contact</div>
+  <h2>Get in touch.</h2>
+  <div class="contact-lines">
+    <div>For product questions and support, reach us on <b>Discord</b> or our <b>help page</b>.</div>
+    <div>For billing support, email <b>billing@lisa.sim</b></div>
+    <div>For journalistic inquiries: <b>press@lisa.sim</b></div>
+  </div>
+</section>
+
+<footer>
+  <span>© 2026 Living Infrastructure Simulator Agent</span>
+  <span>Terms · Privacy · Settings</span>
+</footer>
+
+<script>
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── Rotating 3D code drum ── */
+  const drum = document.getElementById("drum");
+  const PANELS = 10, ROWS = 26, W = 260;
+  const radius = Math.round((W/2) / Math.tan(Math.PI/PANELS));
+  const tokens = ["agent.tick()","user.behave()","inject(pid)","mem.write","proc.mask()","cyber.range","dropper.run","01001101","ρ·load","ldap.bind()","keycloak.oidc","seed_users()","detect?","log.event","0x","ssh :22","payload()","→ node","spawn()","mask.proc","token.issue","peaceful.bg","noise++","validate()"];
+  function hex(n){ let s=""; for(let i=0;i<n;i++) s+="0123456789abcdef"[Math.random()*16|0]; return s; }
+  function line(){ let parts=[], len=0; while(len<26){ let t=Math.random()<0.25?"0x"+hex(4):tokens[Math.random()*tokens.length|0]; parts.push(t); len+=t.length+1; } return parts.join(" ").slice(0,30); }
+  const rowsByPanel=[];
+  for(let p=0;p<PANELS;p++){
+    const panel=document.createElement("div"); panel.className="panel";
+    panel.style.transform="rotateY("+(p*(360/PANELS))+"deg) translateZ("+radius+"px)";
+    const rows=[];
+    for(let r=0;r<ROWS;r++){ const row=document.createElement("div"); row.className="row"; row.textContent=line(); panel.appendChild(row); rows.push(row); }
+    rowsByPanel.push(rows); drum.appendChild(panel);
+  }
+  function pulse(){
+    for(let p=0;p<PANELS;p++){
+      const rows=rowsByPanel[p];
+      for(let k=0;k<3;k++){ const row=rows[Math.random()*rows.length|0]; row.textContent=line(); row.classList.remove("off"); row.classList.add("hot"); setTimeout(()=>row.classList.remove("hot"),220); }
+      rows[Math.random()*rows.length|0].classList.toggle("off");
+    }
+  }
+  if(!reduce) setInterval(pulse,130);
+
+  /* ── Project cards with grainy AI-style thumbnails ── */
+  const projects = [
+    { label:"LISA Core — ML & AI", desc:"We've extended LISA with machine learning and AI to make agent behavior more lifelike and adaptive.", c1:"#03365B", c2:"#01669C", seed:3 },
+    { label:"Backend", desc:"Configuration and control center for the whole system.", c1:"#122538", c2:"#03365B", seed:9 },
+    { label:"Frontend", desc:"Admin panel built with Vue and Vuetify.", c1:"#03365B", c2:"#122538", seed:14 },
+    { label:"Linux Agent", desc:"In-memory agent reproducing believable user activity on Linux.", c1:"#01669C", c2:"#03365B", seed:21 },
+    { label:"Windows Agent", desc:"The same lifelike behavior, on Windows.", c1:"#122538", c2:"#01669C", seed:27 },
+    { label:"Planned — Suspicious activity", desc:"Next, we're teaching our agents to reproduce suspicious and adversarial behavior, so detection training reaches beyond peaceful background noise.", c1:"#01669C", c2:"#9BBACD", seed:33, planned:true }
+  ];
+  function thumb(i, p){
+    return `<svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g${i}" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="${p.c1}"/><stop offset="1" stop-color="${p.c2}"/>
+        </linearGradient>
+        <filter id="cloud${i}"><feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="3" seed="${p.seed}"/><feColorMatrix type="saturate" values="0"/></filter>
+        <filter id="grain${i}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="${p.seed+5}"/><feColorMatrix type="saturate" values="0"/></filter>
+      </defs>
+      <rect width="320" height="180" fill="url(#g${i})"/>
+      <rect width="320" height="180" filter="url(#cloud${i})" opacity="0.55" style="mix-blend-mode:soft-light"/>
+      <rect width="320" height="180" filter="url(#grain${i})" opacity="0.34" style="mix-blend-mode:overlay"/>
+    </svg>`;
+  }
+  const grid = document.getElementById("projGrid");
+  projects.forEach((p,i)=>{
+    const card=document.createElement(p.url?"a":"div"); card.className="proj"+(p.planned?" planned":"");
+    if(p.url){ card.href=p.url; card.target="_blank"; card.rel="noopener"; }
+    card.innerHTML = (p.planned?`<span class="badge">Planned</span>`:"") +
+      (p.url?`<span class="badge repo">Repo →</span>`:"") +
+      `<div class="thumb">${thumb(i,p)}</div>` +
+      `<div class="pinfo"><div class="plabel">${p.label}</div><div class="pdesc">${p.desc}</div></div>`;
+    grid.appendChild(card);
+  });
+
+  /* ── CRT white-noise (TV snow) ── */
+  const nz=document.getElementById("noise"); const nctx=nz.getContext("2d"); const hero=document.querySelector(".hero");
+  let baseOpacity=0.10;
+  function sizeNoise(){ nz.width=Math.max(2,Math.ceil(hero.offsetWidth/4)); nz.height=Math.max(2,Math.ceil(hero.offsetHeight/4)); }
+  sizeNoise(); window.addEventListener("resize", sizeNoise);
+  function drawNoise(){ const w=nz.width,h=nz.height,img=nctx.createImageData(w,h),d=img.data; for(let i=0;i<d.length;i+=4){ const v=Math.random()*255|0; d[i]=d[i+1]=d[i+2]=v; d[i+3]=Math.random()*255|0; } nctx.putImageData(img,0,0); }
+  function burst(){ if(Math.random()<0.5){ nz.style.opacity=0.4+Math.random()*0.35; setTimeout(()=>{ nz.style.opacity=baseOpacity; }, 90+Math.random()*160); } setTimeout(burst, 1400+Math.random()*3200); }
+  if(!reduce){ setInterval(drawNoise,55); burst(); } else { drawNoise(); }
+
+  /* ── Decode / scramble effect ── */
+  const DCHARS="01<>/{}[]#$%&*+=-ABCDEFGHKLMNPRSTUVXYZ·▚▞▓".split("");
+  function decode(el, finalText, speed=26, lockEvery=1){
+    if(reduce){ el.textContent=finalText; return; }
+    const chars=finalText.split(""); let frame=0, locked=0;
+    const tick=()=>{ let out=""; for(let i=0;i<chars.length;i++){ if(i<locked) out+=chars[i]; else if(chars[i]===" ") out+=" "; else out+=DCHARS[Math.random()*DCHARS.length|0]; } el.textContent=out; frame++; if(frame%lockEvery===0) locked++; if(locked<=chars.length) setTimeout(()=>requestAnimationFrame(tick),speed); else el.textContent=finalText; };
+    tick();
+  }
+  const tagline=document.querySelector(".decoded");
+  setTimeout(()=>decode(tagline, tagline.dataset.decode, 22, 1), 500);
+  const io=new IntersectionObserver((entries)=>{ entries.forEach(e=>{ if(e.isIntersecting){ const el=e.target; decode(el, el.textContent.trim(), 34, 1); io.unobserve(el);} }); }, { threshold:0.6 });
+  document.querySelectorAll("[data-decode-head]").forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
