@@ -1,0 +1,368 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px var(--page-pad);
+  backdrop-filter: var(--nav-blur);
+  background: linear-gradient(to bottom, rgba(13, 15, 12, 0.9), rgba(13, 15, 12, 0.4));
+  border-bottom: 1px solid rgba(155, 186, 205, 0.12);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--white);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--accent-glow);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--light);
+}
+
+.nav-links a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: var(--white);
+}
+
+.nav-links a.active {
+  color: var(--white);
+  border-bottom: 1px solid var(--accent);
+}
+
+.page {
+  flex: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px var(--page-pad) 80px;
+}
+
+.sec-head {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--space-lg);
+}
+
+.page h1 {
+  font-size: clamp(22px, 3.4vw, 34px);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--white);
+}
+
+.page-sub {
+  color: var(--light);
+  font-size: 15px;
+  margin-top: var(--space-sm);
+  max-width: 64ch;
+}
+
+.stat-grid {
+  margin-top: 40px;
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.card {
+  border: 1px solid rgba(155, 186, 205, 0.14);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  padding: var(--space-lg);
+  transition: border-color 0.25s, transform 0.25s;
+}
+
+.card:hover {
+  border-color: rgba(155, 186, 205, 0.4);
+}
+
+.stat-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--light);
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 500;
+  color: var(--white);
+  margin-top: var(--space-xs);
+}
+
+.table {
+  width: 100%;
+  margin-top: 32px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--light);
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(155, 186, 205, 0.18);
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(155, 186, 205, 0.08);
+  color: var(--white);
+}
+
+.table tr:hover td {
+  background: rgba(3, 54, 91, 0.25);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--light);
+}
+
+.status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--light);
+}
+
+.status.online::before,
+.status.active::before {
+  background: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.status.offline::before {
+  background: rgba(155, 186, 205, 0.3);
+}
+
+.form {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-width: 620px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.field label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--light);
+}
+
+.field input,
+.field select,
+.field textarea {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--white);
+  background: rgba(18, 37, 56, 0.5);
+  border: 1px solid rgba(155, 186, 205, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  transition: border-color 0.2s;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(1, 102, 156, 0.4);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: rgba(155, 186, 205, 0.7);
+}
+
+.app-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.app-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(155, 186, 205, 0.25);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  color: var(--light);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.app-chip:hover {
+  border-color: rgba(155, 186, 205, 0.5);
+  color: var(--white);
+}
+
+.app-chip.selected {
+  border-color: var(--accent);
+  background: rgba(1, 102, 156, 0.18);
+  color: var(--white);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 12px 28px;
+  border: 1px solid rgba(155, 186, 205, 0.4);
+  border-radius: var(--radius-xl);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--white);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(1, 102, 156, 0.15);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--light);
+  border-color: var(--light);
+  color: var(--bg);
+  font-weight: 500;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--white);
+  border-color: var(--white);
+}
+
+.notice {
+  margin-top: var(--space-md);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  border: 1px solid rgba(155, 186, 205, 0.25);
+  color: var(--light);
+}
+
+.notice.error {
+  border-color: rgba(226, 75, 74, 0.5);
+  color: #e2b0af;
+}
+
+.notice.success {
+  border-color: var(--accent);
+  color: var(--white);
+}
+
+.empty {
+  margin-top: 32px;
+  color: var(--light);
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .nav {
+    padding: 16px 20px;
+  }
+  .nav-links {
+    gap: 14px;
+  }
+  .page {
+    padding: 32px 20px 60px;
+  }
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.field-row .field {
+  flex: 1;
+  min-width: 140px;
+}
+
+.app-row {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.app-row input {
+  flex: 1;
+}
+
+.field-row .field label {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+}
