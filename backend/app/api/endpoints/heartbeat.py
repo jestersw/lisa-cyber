@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.models.models import Agent, AgentActivity
+from app.ratelimit import rate_limit
 from app.schemas import AgentHeartbeatRequest, AgentHeartbeatResponse
 from app.security import require_agent_token
 
@@ -20,7 +21,7 @@ def _utcnow() -> datetime:
 @router.post(
     "/agents/heartbeat",
     response_model=AgentHeartbeatResponse,
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(rate_limit())],
 )
 def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == hb.agent_id).first()

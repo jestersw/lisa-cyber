@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.models import ActivityEvent, Agent
+from app.ratelimit import rate_limit
 from app.schemas import ActivityEventBatch, ActivityEventResponse
 from app.security import require_agent_token
 
@@ -14,7 +15,7 @@ router = APIRouter()
 
 @router.post(
     "/agents/{agent_id}/events",
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(rate_limit())],
 )
 def ingest_events(agent_id: str, batch: ActivityEventBatch, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
