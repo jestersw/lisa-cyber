@@ -97,3 +97,41 @@ def test_heartbeat_unknown_agent_is_rejected(client):
     resp = client.post("/api/agents/heartbeat", json=payload)
     assert resp.status_code == 404
     assert client.get("/api/agents").json() == []
+
+
+def test_heartbeat_interval_comes_from_agent_config(client):
+    agent_id = client.post(
+        "/api/agents/generate",
+        json={
+            "name": "A",
+            "role": "developer",
+            "os_type": "linux",
+            "applications": ["vscode"],
+            "heartbeat_interval_minutes": 30,
+        },
+    ).json()["agent_id"]
+
+    body = client.post(
+        "/api/agents/heartbeat",
+        json={"agent_id": agent_id, "status": "active", "system_info": {}},
+    ).json()
+    assert body["next_heartbeat_in"] == 1800
+
+
+def test_heartbeat_interval_honours_override(client):
+    agent_id = client.post(
+        "/api/agents/generate",
+        json={
+            "name": "B",
+            "role": "admin",
+            "os_type": "linux",
+            "applications": ["vscode"],
+            "heartbeat_interval_minutes": 5,
+        },
+    ).json()["agent_id"]
+
+    body = client.post(
+        "/api/agents/heartbeat",
+        json={"agent_id": agent_id, "status": "active", "system_info": {}},
+    ).json()
+    assert body["next_heartbeat_in"] == 300
