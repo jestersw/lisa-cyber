@@ -13,6 +13,7 @@ dev = [
 
 [project.scripts]
 lisa-ml-train = "lisa_ml.train:main"
+lisa-ml-retrain = "lisa_ml.retrain:main"
 
 [tool.ruff]
 line-length = 100

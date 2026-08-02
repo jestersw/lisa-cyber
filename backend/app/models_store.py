@@ -8,7 +8,7 @@ from pathlib import Path
 class ModelStore:
     def __init__(self, directory: str | Path) -> None:
         self.directory = Path(directory)
-        self._cache: dict[str, dict] = {}
+        self._cache: dict[str, tuple[float, dict]] = {}
         self._lock = threading.Lock()
 
     def _load(self, name: str) -> dict | None:
@@ -24,12 +24,23 @@ class ModelStore:
         return data
 
     def get(self, name: str) -> dict | None:
+        path = self.directory / f"{name}.json"
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            with self._lock:
+                self._cache.pop(name, None)
+            return None
+
         with self._lock:
-            if name in self._cache:
-                return self._cache[name]
+            cached = self._cache.get(name)
+            if cached is not None and cached[0] == mtime:
+                return cached[1]
             data = self._load(name)
-            if data is not None:
-                self._cache[name] = data
+            if data is None:
+                self._cache.pop(name, None)
+                return None
+            self._cache[name] = (mtime, data)
             return data
 
     def clear(self) -> None:

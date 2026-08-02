@@ -37,13 +37,31 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: '["http://localhost:5173"]'
+      ML_MODELS_DIR: /models
     ports:
       - "8000:8000"
+    volumes:
+      - models:/models
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  trainer:
+    build: ./ml
+    command:
+      - lisa-ml-retrain
+      - --backend
+      - http://backend:8000
+      - --out
+      - /models
+      - --interval
+      - "${RETRAIN_INTERVAL:-3600}"
+    volumes:
+      - models:/models
+    depends_on:
+      - backend
 
   frontend:
     build: ./frontend
@@ -54,3 +72,4 @@ services:
 
 volumes:
   pgdata:
+  models:
