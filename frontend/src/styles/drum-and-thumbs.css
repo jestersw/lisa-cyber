@@ -1,0 +1,253 @@
+/* 3D drum + procedural thumbnails.
+   Ported from docs/design/panel-mockup.html. Added on top of landing.css. */
+
+/* ── 3D code drum ── */
+
+/* perspective lives on .hero (the section) rather than on .stage — that gives
+   the browser a stable viewpoint. When perspective sits on an absolute-inset
+   flex container the 3D collapses in some engines. */
+.landing .hero {
+  perspective: 1100px;
+  -webkit-perspective: 1100px;
+}
+
+.landing .stage {
+  perspective: 1100px;
+  -webkit-perspective: 1100px;
+  transform-style: preserve-3d;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.landing .drum {
+  position: relative;
+  width: 230px;
+  height: 600px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  will-change: transform;
+  animation: drum-spin 45s linear infinite;
+}
+
+@keyframes drum-spin {
+  from {
+    transform: rotateX(-8deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-8deg) rotateY(360deg);
+  }
+}
+
+.landing .drum-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 230px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 14px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--accent);
+  text-shadow: 0 0 6px rgba(1, 102, 156, 0.5);
+}
+
+.landing .drum-row {
+  transition: color 0.12s, opacity 0.12s;
+}
+
+.landing .drum-row.hot {
+  color: var(--white);
+  text-shadow: 0 0 8px var(--accent);
+}
+
+.landing .drum-row.off {
+  opacity: 0.35;
+}
+
+@media (max-width: 640px) {
+  .landing .drum,
+  .landing .drum-panel {
+    width: 190px;
+    height: 420px;
+  }
+  .landing .drum-panel {
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .drum {
+    animation: none;
+  }
+}
+
+/* ── Procedural SVG thumbnails ──
+   isolation: isolate creates a new stacking context so mix-blend-mode inside
+   the SVG only blends with the SVG's own layers, not the page behind it —
+   that's what makes the grain deep instead of washed out. */
+.landing .proj .thumb {
+  isolation: isolate;
+}
+
+.landing .proj .thumb-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.landing .stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 45% 40% at 50% 50%,
+    rgba(13, 15, 12, 0) 0%,
+    rgba(13, 15, 12, 0.55) 65%,
+    rgba(13, 15, 12, 0.9) 100%
+  );
+}
+
+.landing .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.055;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  animation: grain-shift 620ms steps(1) infinite;
+}
+
+@keyframes grain-shift {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-6px, 4px);
+  }
+  40% {
+    transform: translate(5px, -7px);
+  }
+  60% {
+    transform: translate(-8px, -3px);
+  }
+  80% {
+    transform: translate(7px, 6px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .hero::after {
+    animation: none;
+  }
+}
+
+.landing .drum-panel {
+  opacity: 0.55;
+}
+
+.landing .drum-panel {
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 22%,
+    black 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 22%,
+    black 78%,
+    transparent 100%
+  );
+}
+
+.landing .drum {
+  perspective-origin: 50% 50%;
+}
+
+.landing .drum-panel {
+  font-size: 11px;
+  line-height: 1.65;
+  opacity: 0.42;
+}
+
+.landing .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  animation: grain-shift 700ms steps(1) infinite;
+}
+
+@keyframes grain-shift {
+  0% { background-position: 0 0; }
+  25% { background-position: -40px 30px; }
+  50% { background-position: 35px -45px; }
+  75% { background-position: -25px -20px; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .hero::after {
+    animation: none;
+  }
+}
+
+.landing .drum-panel {
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.62;
+}
+
+.landing .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23s)' opacity='0.85'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  animation: grain-shift 500ms steps(1) infinite;
+}
+
+@keyframes grain-shift {
+  0% { background-position: 0 0; }
+  20% { background-position: -30px 20px; }
+  40% { background-position: 25px -35px; }
+  60% { background-position: -20px -25px; }
+  80% { background-position: 30px 15px; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .hero::after {
+    animation: none;
+  }
+}

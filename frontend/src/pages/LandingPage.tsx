@@ -1,41 +1,60 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/landing.css";
+import "../styles/drum-and-thumbs.css";
+import { CodeDrum } from "../components/landing/CodeDrum";
+import { ProjectThumb } from "../components/landing/ProjectThumb";
 
-// Simple project cards for the Projects section. In the mockup thumbnails are
-// procedurally generated SVGs — we'll wire that up in a later PR; for now
-// each card has a solid gradient thumbnail so the section already looks
-// intentional.
+// Project data — matches the mockup 1:1: gradient colours + a seed for the
+// turbulence filter so each card gets a stable, distinct grainy thumbnail.
 const PROJECTS = [
   {
+    id: "core",
     label: "LISA Core — ML & AI",
     desc: "We've extended LISA with machine learning and AI to make agent behavior more lifelike and adaptive.",
-    gradient: "linear-gradient(135deg, #03365B, #01669C)",
+    c1: "#03365B",
+    c2: "#01669C",
+    seed: 3,
   },
   {
+    id: "backend",
     label: "Backend",
     desc: "Configuration and control center for the whole system.",
-    gradient: "linear-gradient(135deg, #122538, #03365B)",
+    c1: "#122538",
+    c2: "#03365B",
+    seed: 9,
   },
   {
+    id: "frontend",
     label: "Frontend",
     desc: "Admin panel built with React and TypeScript.",
-    gradient: "linear-gradient(135deg, #03365B, #122538)",
+    c1: "#03365B",
+    c2: "#122538",
+    seed: 14,
   },
   {
+    id: "linux",
     label: "Linux Agent",
     desc: "In-memory agent reproducing believable user activity on Linux.",
-    gradient: "linear-gradient(135deg, #01669C, #03365B)",
+    c1: "#01669C",
+    c2: "#03365B",
+    seed: 21,
   },
   {
+    id: "windows",
     label: "Windows Agent",
     desc: "The same lifelike behavior, on Windows.",
-    gradient: "linear-gradient(135deg, #122538, #01669C)",
+    c1: "#122538",
+    c2: "#01669C",
+    seed: 27,
   },
   {
+    id: "planned",
     label: "Planned — Suspicious activity",
     desc: "Next, we're teaching our agents to reproduce suspicious and adversarial behavior, so detection training reaches beyond peaceful background noise.",
-    gradient: "linear-gradient(135deg, #01669C, #9BBACD)",
+    c1: "#01669C",
+    c2: "#9BBACD",
+    seed: 33,
     planned: true,
   },
 ];
@@ -43,8 +62,6 @@ const PROJECTS = [
 export function LandingPage() {
   const navigate = useNavigate();
 
-  // Enter key on the landing page also enters the panel. Nothing else on this
-  // page listens to Enter, so this is safe.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Enter") {
@@ -72,6 +89,7 @@ export function LandingPage() {
       </nav>
 
       <header className="hero">
+        <CodeDrum />
         <div className="hero-inner">
           <div className="eyebrow">An independent simulation lab</div>
           <h1>
@@ -113,9 +131,11 @@ export function LandingPage() {
         </p>
         <div className="proj-grid">
           {PROJECTS.map((p) => (
-            <div key={p.label} className={`proj${p.planned ? " planned" : ""}`}>
+            <div key={p.id} className={`proj${p.planned ? " planned" : ""}`}>
               {p.planned && <span className="badge">Planned</span>}
-              <div className="thumb" style={{ background: p.gradient }} />
+              <div className="thumb">
+                <ProjectThumb id={p.id} c1={p.c1} c2={p.c2} seed={p.seed} />
+              </div>
               <div className="pinfo">
                 <div className="plabel">{p.label}</div>
                 <div className="pdesc">{p.desc}</div>
