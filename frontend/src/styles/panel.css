@@ -413,3 +413,44 @@
   text-decoration: none;
   border-bottom: 1px solid var(--accent);
 }
+
+.dist-list {
+  margin-top: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 560px;
+}
+
+.dist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 14px;
+}
+
+.dist-app {
+  flex: 0 0 130px;
+  color: var(--white);
+}
+
+.dist-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(155, 186, 205, 0.12);
+  overflow: hidden;
+}
+
+.dist-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.dist-share {
+  flex: 0 0 44px;
+  text-align: right;
+  color: var(--light);
+}

@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     agent_token: str | None = None
     public_base_url: str = "http://localhost:8000"
 
-    ml_model_path: str = "model.json"
     ml_models_dir: str = "models"
     default_activity: str = "firefox"
 

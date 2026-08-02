@@ -79,7 +79,13 @@ export function AgentDetail() {
         <div className="card">
           <div className="stat-label">Predicted next</div>
           <div className="stat-value small">{prediction?.next_activity ?? "-"}</div>
-          {prediction && <div className="field-hint">source: {prediction.source}</div>}
+          {prediction && (
+            <div className="field-hint">
+              {prediction.source === "model"
+                ? `from ${prediction.trained_on ?? "model"}`
+                : "no model yet, falling back"}
+            </div>
+          )}
         </div>
       </div>
 
@@ -132,6 +138,28 @@ export function AgentDetail() {
               </span>
             ))}
           </div>
+        </>
+      )}
+
+      {prediction?.distribution && (
+        <>
+          <h2 className="section-title">Next application</h2>
+          <div className="dist-list">
+            {Object.entries(prediction.distribution)
+              .sort((a, b) => b[1] - a[1])
+              .map(([app, share]) => (
+                <div className="dist-row" key={app}>
+                  <span className="dist-app">{app}</span>
+                  <span className="dist-bar">
+                    <span className="dist-fill" style={{ width: `${Math.round(share * 100)}%` }} />
+                  </span>
+                  <span className="dist-share">{Math.round(share * 100)}%</span>
+                </div>
+              ))}
+          </div>
+          <p className="field-hint">
+            Learned from activity logs; the agent samples from this distribution.
+          </p>
         </>
       )}
 
