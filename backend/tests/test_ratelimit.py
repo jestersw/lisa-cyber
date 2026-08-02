@@ -51,9 +51,11 @@ def test_fail_open_when_no_redis(monkeypatch):
 
 
 def test_fail_open_on_redis_error(monkeypatch):
+    import redis
+
     class BrokenRedis:
         def incr(self, *a):
-            raise rl.redis.RedisError("boom")
+            raise redis.RedisError("boom")
 
     monkeypatch.setattr(rl, "get_redis", lambda: BrokenRedis())
     assert _allow("token:err", limit=1, window_seconds=60) is True
@@ -67,3 +69,16 @@ def test_dependency_raises_429_over_limit(fake_redis):
     with pytest.raises(HTTPException) as exc:
         dep(req, authorization="Bearer t")
     assert exc.value.status_code == 429
+
+
+def test_fails_open_when_redis_package_is_absent(monkeypatch):
+    """If the `redis` package isn't installed, rate_limit must fail open
+    instead of crashing. Simulated by setting the module-level _redis_module
+    to None (which is what happens when the top-level import fails)."""
+    monkeypatch.setattr(rl, "_redis_module", None)
+    monkeypatch.setattr(rl, "_redis", None)  # force fresh get_redis()
+
+    assert rl.get_redis() is None
+    # Every check must be allowed through, no matter the limit.
+    for _ in range(100):
+        assert _allow("token:x", limit=1, window_seconds=60) is True
