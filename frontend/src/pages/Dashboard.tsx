@@ -1,16 +1,11 @@
-import { useEffect, useState } from "react";
 import { endpoints, type Agent } from "../api/client";
+import { usePolling } from "../hooks/usePolling";
+
+const REFRESH_MS = 30_000;
 
 export function Dashboard() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    endpoints
-      .agents()
-      .then(setAgents)
-      .catch((err: Error) => setError(err.message));
-  }, []);
+  const { data, error } = usePolling<Agent[]>(endpoints.agents, REFRESH_MS);
+  const agents = data ?? [];
 
   const online = agents.filter((a) => a.status === "online" || a.status === "active").length;
   const offline = agents.length - online;
