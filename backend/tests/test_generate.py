@@ -179,3 +179,51 @@ def test_config_skips_when_llm_unavailable(client):
     pkg = client.get(f"/api/agents/{agent_id}/config").json()
     assert pkg["application_plugins"] == {}
     assert pkg["agent_config"]["applications"] == ["ghost"]
+
+
+def test_parse_plugin_drops_zero_weight_activities():
+    from app.llm import parse_plugin
+
+    raw = json.dumps(
+        {
+            "app_info": {"name": "x"},
+            "execution": {"open_command": "x"},
+            "activities": [
+                {"id": "a", "name": "A", "weight": 50, "commands": []},
+                {"id": "b", "name": "B", "weight": 0, "commands": []},
+            ],
+        }
+    )
+    data = parse_plugin(raw)
+    assert [a["id"] for a in data["activities"]] == ["a"]
+
+
+def test_parse_plugin_rejects_all_zero_weights():
+    from app.llm import parse_plugin
+
+    raw = json.dumps(
+        {
+            "app_info": {"name": "x"},
+            "execution": {"open_command": "x"},
+            "activities": [{"id": "a", "name": "A", "weight": 0, "commands": []}],
+        }
+    )
+    assert parse_plugin(raw) is None
+
+
+def test_generate_plugin_retries_until_valid(client):
+    from app.llm import configure_provider, generate_plugin
+
+    class FlakyProvider:
+        def __init__(self):
+            self.calls = 0
+
+        def generate(self, prompt):
+            self.calls += 1
+            return "garbage" if self.calls < 3 else PLUGIN_JSON
+
+    provider = FlakyProvider()
+    configure_provider(provider)
+    plugin = generate_plugin("discord", "linux")
+    assert plugin is not None
+    assert provider.calls == 3

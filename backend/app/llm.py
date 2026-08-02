@@ -114,8 +114,25 @@ def build_plugin_prompt(name: str, os_type: str, description: str | None = None)
         "Each command object has type set to one of key, key_combination or type_text, "
         "a delay in seconds, and then key for key, keys for key_combination, "
         "or text for type_text. "
-        "Give at least two realistic activities with weights that sum to about 100. "
-        "Use real commands for the target OS. Do not add keys beyond those listed."
+        "The id fields are strings. Commands are keyboard actions performed with xdotool, "
+        "never shell commands. Follow this example exactly: "
+        '{"app_info": {"name": "slack", "display_name": "Slack", "category": "communication"}, '
+        '"installation": {"check_command": "slack --version", "install_method": "apt", '
+        '"install_commands": ["sudo apt-get install -y slack"], "post_install_commands": [], '
+        '"dependencies": ["xdotool"]}, '
+        '"execution": {"open_command": "slack", "close_command": "pkill -f slack", '
+        '"window_class": "Slack", "startup_delay": 5}, '
+        '"activities": [{"id": "read_messages", "name": "Read messages", "weight": 60, '
+        '"min_duration": 20, "max_duration": 90, "commands": ['
+        '{"type": "key", "key": "Down", "delay": 1}, '
+        '{"type": "key_combination", "keys": "ctrl+k", "delay": 2}]}, '
+        '{"id": "reply", "name": "Reply", "weight": 40, "min_duration": 15, "max_duration": 45, '
+        '"commands": [{"type": "type_text", "text": "on it", "delay": 1}, '
+        '{"type": "key", "key": "Return", "delay": 1}]}], '
+        '"settings": {"usage_probability": 0.8, "work_hours_only": true}}. '
+        "Give between two and five realistic activities. "
+        "Every weight must be above zero and they should sum to about 100. "
+        "Do not add keys beyond those in the example."
     )
 
 
@@ -134,14 +151,26 @@ def parse_plugin(raw: str) -> dict | None:
     except (ValueError, TypeError):
         return None
     try:
-        return ApplicationPlugin(**obj).model_dump(exclude_none=True)
+        plugin = ApplicationPlugin(**obj)
     except (ValidationError, TypeError):
         return None
-
-
-def generate_plugin(name: str, os_type: str, description: str | None = None) -> dict | None:
-    try:
-        raw = get_provider().generate(build_plugin_prompt(name, os_type, description))
-    except LLMError:
+    usable = [a for a in plugin.activities if a.weight > 0]
+    if not usable:
         return None
-    return parse_plugin(raw)
+    plugin.activities = sorted(usable, key=lambda a: a.weight, reverse=True)[:6]
+    return plugin.model_dump(exclude_none=True)
+
+
+def generate_plugin(
+    name: str, os_type: str, description: str | None = None, attempts: int = 3
+) -> dict | None:
+    prompt = build_plugin_prompt(name, os_type, description)
+    for _ in range(max(1, attempts)):
+        try:
+            raw = get_provider().generate(prompt)
+        except LLMError:
+            return None
+        plugin = parse_plugin(raw)
+        if plugin is not None:
+            return plugin
+    return None

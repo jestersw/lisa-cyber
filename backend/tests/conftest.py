@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.database as database
 from app.database import Base
+from app.llm import LLMError, configure_provider, reset_provider
 from app.main import app  # importing main registers all models on Base.metadata
 
 
@@ -18,3 +19,15 @@ def client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(database, "_engine", engine)
     monkeypatch.setattr(database, "_SessionLocal", testing_session)
     return TestClient(app)
+
+
+class _OfflineProvider:
+    def generate(self, prompt):
+        raise LLMError("llm disabled in tests")
+
+
+@pytest.fixture(autouse=True)
+def _no_llm():
+    configure_provider(_OfflineProvider())
+    yield
+    reset_provider()
