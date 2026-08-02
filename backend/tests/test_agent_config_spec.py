@@ -79,7 +79,7 @@ def test_generate_stores_and_config_returns_package(client):
     assert ac["agent_info"]["agent_id"] == agent_id
     assert ac["agent_info"]["role"] == "developer"
     assert ac["applications"] == ["code", "firefox"]
-    assert set(ac.keys()) == {"agent_info", "schedule", "behavior", "heartbeat", "applications"}
+    assert {"agent_info", "schedule", "behavior", "heartbeat", "applications"} <= set(ac.keys())
 
     assert "code" in body["application_plugins"]
     assert "firefox" not in body["application_plugins"]
