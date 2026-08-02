@@ -134,6 +134,8 @@ export interface NextActivity {
   next_activity: string;
   activity_type: string;
   source: string;
+  trained_on: string | null;
+  distribution?: Record<string, number>;
 }
 
 export const endpoints = {
