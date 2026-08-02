@@ -92,3 +92,28 @@ def test_package_omits_model_when_no_app_overlap(client, tmp_path):
     agent_id = _make_agent(client, ["gimp"])
     ac = client.get(f"/api/agents/{agent_id}/config").json()["agent_config"]
     assert ac["transition_model"] is None
+
+
+def test_store_picks_up_rewritten_model(tmp_path):
+    import os
+    import time
+
+    path = tmp_path / "_shared.json"
+    path.write_text(json.dumps(SHARED))
+    store = ModelStore(tmp_path)
+    assert store.for_role(None)["trained_on"] == "shared"
+
+    updated = {"version": 1, "trained_on": "shared", "counts": {"gimp": {"vscode": 1}}}
+    path.write_text(json.dumps(updated))
+    os.utime(path, (time.time() + 10, time.time() + 10))
+
+    assert store.for_role(None)["counts"] == {"gimp": {"vscode": 1}}
+
+
+def test_store_forgets_deleted_model(tmp_path):
+    path = tmp_path / "_shared.json"
+    path.write_text(json.dumps(SHARED))
+    store = ModelStore(tmp_path)
+    assert store.for_role(None) is not None
+    path.unlink()
+    assert store.for_role(None) is None
