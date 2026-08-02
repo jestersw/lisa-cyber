@@ -18,6 +18,13 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _interval_seconds(agent: Agent) -> int:
+    configured = (agent.config or {}).get("heartbeat", {}).get("interval_minutes")
+    if isinstance(configured, int | float) and configured > 0:
+        return int(configured * 60)
+    return get_settings().heartbeat_interval_seconds
+
+
 @router.post(
     "/agents/heartbeat",
     response_model=AgentHeartbeatResponse,
@@ -55,7 +62,7 @@ def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
         agent_id=hb.agent_id,
         timestamp=_utcnow(),
         message="Heartbeat processed",
-        next_heartbeat_in=get_settings().heartbeat_interval_seconds,
+        next_heartbeat_in=_interval_seconds(agent),
         commands=[],
     )
 
