@@ -46,7 +46,15 @@ to the agent.
     "inactive_period": { "min": 10, "max": 20 }
   },
   "heartbeat": { "interval_minutes": 30 },
-  "applications": ["discord", "vscode", "firefox"]
+  "applications": ["discord", "vscode", "firefox"],
+  "transition_model": {
+    "version": 1,
+    "counts": {
+      "vscode":   { "terminal": 45, "firefox": 20, "vscode": 30 },
+      "firefox":  { "slack": 30, "firefox": 25, "mail": 15 },
+      "terminal": { "vscode": 40, "terminal": 30, "firefox": 20 }
+    }
+  }
 }
 ```
 
@@ -64,6 +72,12 @@ to the agent.
   **minutes** (default 30).
 - `applications` — a list of app **names**. The full plugin for each name is
   delivered alongside the config (section 3), not fetched separately.
+- `transition_model` — **optional**. A markov model of app-to-app transitions
+  used to pick the next application. Format matches `MarkovModel.to_dict()` on
+  the backend: `{"version": 1, "counts": {current_app: {next_app: count, ...}}}`.
+  If present, the agent picks the next app by sampling the transition
+  distribution from the current one. If absent, the agent falls back to
+  uniform random choice.
 
 ---
 
@@ -177,6 +191,8 @@ Applied when the user leaves fields blank, before the config is stored/served.
   - `inactive_period`: every 10–20 activity cycles
 - **heartbeat.interval_minutes, if blank:** 30.
 - **workdays, if blank:** Mon–Fri (`[1, 2, 3, 4, 5]`).
+- **transition_model, if absent:** no default — the agent falls back to uniform
+  random choice between applications.
 
 ---
 
