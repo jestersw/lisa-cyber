@@ -1,0 +1,109 @@
+cat > frontend/src/styles/drum-and-thumbs.css << 'CSS'
+/* 3D drum + procedural thumbnails.
+   Ported from docs/design/panel-mockup.html. Added on top of landing.css. */
+
+/* ── 3D code drum ── */
+
+/* perspective lives on .hero (the section) rather than on .stage — that gives
+   the browser a stable viewpoint. When perspective sits on an absolute-inset
+   flex container the 3D collapses in some engines. */
+.landing .hero {
+  perspective: 1100px;
+  -webkit-perspective: 1100px;
+}
+
+.landing .stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.landing .drum {
+  position: relative;
+  width: 260px;
+  height: 520px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  will-change: transform;
+  animation: drum-spin 26s linear infinite;
+  opacity: 0.35;
+}
+
+@keyframes drum-spin {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.landing .drum-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 14px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--accent);
+  text-shadow: 0 0 6px rgba(1, 102, 156, 0.5);
+}
+
+.landing .drum-row {
+  transition: color 0.12s, opacity 0.12s;
+}
+
+.landing .drum-row.hot {
+  color: var(--white);
+  text-shadow: 0 0 8px var(--accent);
+}
+
+.landing .drum-row.off {
+  opacity: 0.35;
+}
+
+@media (max-width: 640px) {
+  .landing .drum,
+  .landing .drum-panel {
+    width: 190px;
+    height: 420px;
+  }
+  .landing .drum-panel {
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .drum {
+    animation: none;
+  }
+}
+
+/* ── Procedural SVG thumbnails ──
+   isolation: isolate creates a new stacking context so mix-blend-mode inside
+   the SVG only blends with the SVG's own layers, not the page behind it —
+   that's what makes the grain deep instead of washed out. */
+.landing .proj .thumb {
+  isolation: isolate;
+}
+
+.landing .proj .thumb-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+CSS
