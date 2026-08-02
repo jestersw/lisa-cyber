@@ -1,2 +1,0 @@
-[console_scripts]
-lisa-ml-train = lisa_ml.train:main
