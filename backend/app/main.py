@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.api.endpoints import (
     agents,
     applications,
+    builds,
     events,
     generate,
     heartbeat,
@@ -46,6 +47,7 @@ app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 app.include_router(events.router, prefix="/api", tags=["Activity events"])
 app.include_router(generate.router, prefix="/api", tags=["Template generation"])
 app.include_router(ml.router, prefix="/api", tags=["ML inference"])
+app.include_router(builds.router, prefix="/api", tags=["Build artefacts"])
 
 
 @app.get("/")
