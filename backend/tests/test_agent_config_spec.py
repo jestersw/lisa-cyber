@@ -1,6 +1,9 @@
 import random
 
+import pytest
+
 from app.defaults import build_agent_config, default_schedule
+from app.llm import LLMError, configure_provider, reset_provider
 
 
 def test_default_schedule_ranges():
@@ -35,6 +38,18 @@ def test_build_agent_config_overrides():
     )
     assert cfg["heartbeat"]["interval_minutes"] == 5
     assert cfg["schedule"] == {"custom": True}
+
+
+class _DownProvider:
+    def generate(self, prompt):
+        raise LLMError("no provider in tests")
+
+
+@pytest.fixture(autouse=True)
+def _no_llm():
+    configure_provider(_DownProvider())
+    yield
+    reset_provider()
 
 
 def _setup(client, apps):
