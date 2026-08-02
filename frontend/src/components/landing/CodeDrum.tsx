@@ -10,9 +10,9 @@ import { useEffect, useRef } from "react";
  * visual matches exactly.
  */
 
-const PANELS = 10;
+const PANELS = 12;
 const ROWS = 26;
-const W = 260;
+const W = 230;
 const PULSE_MS = 130;
 
 const TOKENS = [
