@@ -49,6 +49,7 @@ to the agent.
   "applications": ["discord", "vscode", "firefox"],
   "transition_model": {
     "version": 1,
+    "trained_on": "role:developer",
     "counts": {
       "vscode":   { "terminal": 45, "firefox": 20, "vscode": 30 },
       "firefox":  { "slack": 30, "firefox": 25, "mail": 15 },
@@ -78,6 +79,10 @@ to the agent.
   If present, the agent picks the next app by sampling the transition
   distribution from the current one. If absent, the agent falls back to
   uniform random choice.
+  An optional `trained_on` field marks the origin of the model (`role:developer`,
+  `role:admin`, `shared`, ...) — set by the backend so operators can tell
+  role-specific models from the shared fallback when debugging. The agent
+  ignores this field; only `counts` affects behaviour.
 
 ---
 
