@@ -5,8 +5,9 @@ from pathlib import Path
 
 
 class MarkovModel:
-    def __init__(self) -> None:
+    def __init__(self, trained_on: str | None = None) -> None:
         self.counts: dict[str, dict[str, int]] = {}
+        self.trained_on = trained_on
 
     def fit(self, transitions: list[tuple[str, str]]) -> MarkovModel:
         for state, nxt in transitions:
@@ -28,11 +29,27 @@ class MarkovModel:
         return max(bucket.items(), key=lambda kv: (kv[1], kv[0]))[0]
 
     def to_dict(self) -> dict:
-        return {"version": 1, "counts": self.counts}
+        payload: dict = {"version": 1, "counts": self.counts}
+        if self.trained_on is not None:
+            payload["trained_on"] = self.trained_on
+        return payload
+
+    def restrict_to(self, applications: list[str]) -> MarkovModel:
+        allowed = set(applications)
+        trimmed: dict[str, dict[str, int]] = {}
+        for state, nexts in self.counts.items():
+            if state not in allowed:
+                continue
+            kept = {app: n for app, n in nexts.items() if app in allowed}
+            if kept:
+                trimmed[state] = kept
+        model = MarkovModel(trained_on=self.trained_on)
+        model.counts = trimmed
+        return model
 
     @classmethod
     def from_dict(cls, data: dict) -> MarkovModel:
-        model = cls()
+        model = cls(trained_on=data.get("trained_on"))
         model.counts = {s: dict(n) for s, n in data.get("counts", {}).items()}
         return model
 

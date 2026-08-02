@@ -257,6 +257,7 @@ class AgentConfigSpec(BaseModel):
     behavior: BehaviorSpec
     heartbeat: HeartbeatSpec
     applications: list[str]
+    transition_model: dict | None = None
 
 
 class DeploymentPackage(BaseModel):

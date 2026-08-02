@@ -14,6 +14,7 @@ from app.models.models import (
     BehaviorTemplate,
     Role,
 )
+from app.models_store import get_store, restrict_model
 from app.schemas import (
     AgentConfig,
     AgentConfigSpec,
@@ -197,6 +198,12 @@ def get_agent_config(agent_id: str, db: Session = Depends(get_db)):
         )
         db.commit()
         plugins[name] = generated
+
+    model = get_store().for_role(agent_config.get("agent_info", {}).get("role"))
+    if model is not None:
+        trimmed = restrict_model(model, agent_config.get("applications", []))
+        if trimmed is not None:
+            agent_config = {**agent_config, "transition_model": trimmed}
 
     return DeploymentPackage(
         agent_config=AgentConfigSpec(**agent_config),
