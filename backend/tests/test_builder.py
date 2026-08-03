@@ -299,3 +299,138 @@ def test_workspace_cleaned_up_even_when_sources_step_fails(tmp_path):
         pass
     subdirs = list(ws_root.iterdir()) if ws_root.exists() else []
     assert subdirs == []
+
+
+# ---------- installer produced alongside binary ----------
+
+
+def test_success_persists_installer_alongside_binary(tmp_path):
+    src = _make_agent_source(tmp_path)
+    with patch(
+        "app.services.agent_builder.builder.compiler.compile_agent",
+        side_effect=_fake_compile_success,
+    ):
+        result = build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://b:8000",
+            agent_source_root=src,
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+    # Installer URL is populated on success and lives under the same agent dir
+    # as the binary (single /api/builds/{agent_id}/ endpoint serves both).
+    assert result.installer_url is not None
+    assert result.installer_url.startswith(f"/api/builds/{result.agent_id}/")
+    # File actually landed in storage.
+    installer_file = tmp_path / "stg" / "USR001" / f"installer_{result.agent_id}.sh"
+    assert installer_file.is_file()
+
+
+def test_installer_is_executable_after_build(tmp_path):
+    """Installer must be chmod +x — otherwise the delivery layer would have
+    to do it, defeating the point of self-contained delivery."""
+    import stat
+
+    src = _make_agent_source(tmp_path)
+    with patch(
+        "app.services.agent_builder.builder.compiler.compile_agent",
+        side_effect=_fake_compile_success,
+    ):
+        build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://b",
+            agent_source_root=src,
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+    installer_file = tmp_path / "stg" / "USR001" / "installer_USR001.sh"
+    assert installer_file.stat().st_mode & stat.S_IXUSR
+
+
+def test_failure_produces_no_installer(tmp_path):
+    """Compile failure short-circuits: no installer, no installer_url."""
+    src = _make_agent_source(tmp_path)
+    with patch(
+        "app.services.agent_builder.builder.compiler.compile_agent",
+        side_effect=_fake_compile_failure,
+    ):
+        result = build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://b",
+            agent_source_root=src,
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+    assert result.success is False
+    assert result.installer_url is None
+    assert not (tmp_path / "stg" / "USR001").exists()
+
+
+def test_installer_can_be_run_end_to_end(tmp_path):
+    """The installer that the orchestrator produces should actually work when
+    executed. The compile-agent mock puts arbitrary bytes in the binary, so
+    we swap it for one that puts a runnable script — that way the installer
+    genuinely extracts+launches something we can observe."""
+    import subprocess
+    import time
+
+    from app.services.agent_builder.installer import wrap_as_installer as _orig_wrap
+
+    src = _make_agent_source(tmp_path)
+    marker = tmp_path / "agent_ran.marker"
+
+    def compile_produces_runnable_agent(*args, **kwargs):
+        output_dir = kwargs.get("output_dir") or args[1]
+        binary_name = kwargs.get("binary_name") or args[2]
+        binary_path = output_dir / binary_name
+        binary_path.write_text(f"#!/bin/sh\necho ran > '{marker}'\n")
+        binary_path.chmod(0o755)
+        return compiler.CompileResult(
+            success=True,
+            binary_path=binary_path,
+            stdout="",
+            stderr="",
+            returncode=0,
+        )
+
+    install_dir = tmp_path / "install_root"
+
+    with (
+        patch(
+            "app.services.agent_builder.builder.compiler.compile_agent",
+            side_effect=compile_produces_runnable_agent,
+        ),
+        # patch the default install dir so we don't try to write to /opt/lisa
+        patch(
+            "app.services.agent_builder.builder.installer_mod.wrap_as_installer",
+            side_effect=lambda binary, out, *, agent_id, install_dir=str(install_dir): (
+                _orig_wrap(binary, out, agent_id=agent_id, install_dir=install_dir)
+            ),
+        ),
+    ):
+        build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://b",
+            agent_source_root=src,
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+    installer = tmp_path / "stg" / "USR001" / "installer_USR001.sh"
+    subprocess.run([str(installer)], check=True, timeout=10)
+    for _ in range(20):
+        if marker.exists():
+            break
+        time.sleep(0.1)
+    assert marker.exists()

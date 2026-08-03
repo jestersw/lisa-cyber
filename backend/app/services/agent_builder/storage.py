@@ -91,3 +91,44 @@ def store(
         package_path=dest_package,
         download_url=download_url,
     )
+
+
+def store_installer(
+    agent_id: str,
+    installer: Path,
+    root: Path = DEFAULT_STORAGE_ROOT,
+) -> str:
+    """Copy the installer into the agent's storage directory next to the binary.
+
+    Overwrites any previous installer for the same agent (rebuilds win, no
+    versioning — matches store()'s semantics).
+
+    Returns the relative download URL the FastAPI app will serve. The path
+    layout stays flat (single dir per agent) so the existing
+    /api/builds/{agent_id}/{filename} endpoint serves both artefacts.
+    """
+    if not agent_id:
+        raise StorageError("agent_id must be provided")
+    if not installer.is_file():
+        raise StorageError(f"installer not found: {installer}")
+
+    dest_dir = root / agent_id
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise StorageError(f"could not create storage dir {dest_dir}: {exc}") from exc
+
+    dest_installer = dest_dir / installer.name
+    try:
+        shutil.copy2(installer, dest_installer)
+    except OSError as exc:
+        raise StorageError(f"could not copy installer to {dest_dir}: {exc}") from exc
+
+    download_url = f"/api/builds/{agent_id}/{installer.name}"
+    log.info(
+        "stored installer for %s at %s (url: %s)",
+        agent_id,
+        dest_installer,
+        download_url,
+    )
+    return download_url
