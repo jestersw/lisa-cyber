@@ -32,20 +32,27 @@ log = logging.getLogger("lisa.agents")
 router = APIRouter()
 
 
-def _queue_build(db: Session, agent: Agent) -> bool:
+BUILDABLE_OS = {"linux"}
+
+
+def _queue_build(db: Session, agent: Agent) -> str:
+    if agent.os_type not in BUILDABLE_OS:
+        log.info("builds are not available for %s yet, agent %s", agent.os_type, agent.agent_id)
+        return "unsupported_os"
+
     redis_client = get_redis()
     if redis_client is None:
         log.warning("redis unavailable, agent %s stays configured", agent.agent_id)
-        return False
+        return "queue_unavailable"
     try:
         enqueue_build(redis_client, agent.agent_id)
     except Exception as exc:
         log.warning("could not enqueue build for %s: %s", agent.agent_id, exc)
-        return False
+        return "queue_unavailable"
     agent.status = "building"
     db.commit()
     db.refresh(agent)
-    return True
+    return "queued"
 
 
 @router.post("/agents/generate", response_model=AgentGenerateResponse)
@@ -103,7 +110,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_agent)
 
-    queued = _queue_build(db, db_agent)
+    build_status = _queue_build(db, db_agent)
 
     return AgentGenerateResponse(
         agent_id=agent_id,
@@ -114,7 +121,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
             "os_type": config.os_type.value,
             "role": role_name,
             "template_id": config.template_id,
-            "build_queued": queued,
+            "build_status": build_status,
         },
         config_url=f"/api/agents/{agent_id}/config",
         status_url=f"/api/agents/{agent_id}/status",
