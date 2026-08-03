@@ -170,6 +170,8 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             else (agent.config or {}).get("agent_info", {}).get("role"),
             "template": agent.template.name if agent.template else None,
             "last_seen": agent.last_seen,
+            "binary_url": agent.binary_url,
+            "installer_url": agent.installer_url,
         },
         "recent_activities": [
             {"id": a.id, "type": a.activity_type, "data": a.activity_data, "timestamp": a.timestamp}
