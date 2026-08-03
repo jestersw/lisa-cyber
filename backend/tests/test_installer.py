@@ -96,7 +96,7 @@ def test_running_installer_extracts_and_launches_agent(tmp_path):
     marker_file = tmp_path / "agent_ran.marker"
     fake_agent = tmp_path / "fake_agent"
     fake_agent.write_text(
-        f"#!/bin/sh\necho ran > '{marker_file}'\n",
+        f"#!/bin/sh\necho ran > '{marker_file}'\nsleep 30\n",
     )
     fake_agent.chmod(0o755)
 
@@ -125,7 +125,7 @@ def test_running_installer_extracts_and_launches_agent(tmp_path):
 
 def test_running_installer_places_agent_with_expected_name(tmp_path):
     fake_agent = tmp_path / "fake_agent"
-    fake_agent.write_text("#!/bin/sh\nexit 0\n")
+    fake_agent.write_text("#!/bin/sh\nsleep 30\n")
     fake_agent.chmod(0o755)
 
     installer = tmp_path / "installer.sh"
@@ -157,3 +157,24 @@ def test_unwritable_output_raises(tmp_path):
     bad_out = tmp_path / "does" / "not" / "exist" / "installer.sh"
     with pytest.raises(InstallerError, match="could not write"):
         wrap_as_installer(binary, bad_out, agent_id="USR001")
+
+
+def test_installer_fails_when_agent_dies_immediately(tmp_path):
+    """The whole point of the kill -0 check: if the binary is broken (exits
+    on startup), the installer must NOT report success."""
+    import subprocess
+
+    # A fake "agent" that just exits — simulates a broken Nuitka build,
+    # missing shared library, etc.
+    fake_agent = tmp_path / "fake_agent"
+    fake_agent.write_text("#!/bin/sh\nexit 1\n")
+    fake_agent.chmod(0o755)
+
+    installer = tmp_path / "installer.sh"
+    install_dir = tmp_path / "install_root"
+    wrap_as_installer(fake_agent, installer, agent_id="USR001", install_dir=str(install_dir))
+
+    # Should exit non-zero because the "agent" died within 1s.
+    result = subprocess.run([str(installer)], capture_output=True, timeout=10, check=False)
+    assert result.returncode != 0
+    assert b"agent process died" in result.stderr

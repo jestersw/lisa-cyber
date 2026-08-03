@@ -100,6 +100,12 @@ def _bash_header(*, agent_id: str, install_dir: str) -> str:
     Kept small and readable - an operator can `head` the installer file and
     understand what it will do. Uses only /bin/sh-compatible builtins so it
     works on minimal VMs that lack bash proper.
+
+    After launching, waits a moment and checks the agent is still alive.
+    A broken binary (missing lib, crash on startup) would nohup+background
+    cleanly, and the installer would report success even though nothing is
+    running. The kill -0 check catches this so callers see a nonzero exit
+    when the agent didn't actually stay up.
     """
     marker = _PAYLOAD_MARKER.decode("ascii")
     # Path where the agent will end up on the VM. agent_id in the name so
@@ -123,6 +129,16 @@ chmod +x "$agent_path"
 # Launch detached from this shell so the installer can exit cleanly.
 # nohup + & keeps the agent alive after the installer process ends.
 nohup "$agent_path" >/dev/null 2>&1 &
+agent_pid=$!
+
+# Give the agent a moment to fail fast (missing lib, crash on startup),
+# then check it's actually still alive. Without this, a broken binary would
+# nohup+background cleanly and we'd exit 0 while nothing is really running.
+sleep 1
+if ! kill -0 "$agent_pid" 2>/dev/null; then
+    echo "installer: agent process died within a second of launch" >&2
+    exit 1
+fi
 
 # Successful exit. Anything after this line is the binary payload and must
 # never be interpreted as script - `exit 0` above ends execution first.
