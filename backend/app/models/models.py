@@ -89,6 +89,7 @@ class Agent(Base):
     )
     binary_url: Mapped[str | None] = mapped_column(String(500), default=None)
     agent_token: Mapped[str | None] = mapped_column(String(200), default=None)
+    installer_url: Mapped[str | None] = mapped_column(String(500), default=None)
     version_info: Mapped[dict | None] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(
