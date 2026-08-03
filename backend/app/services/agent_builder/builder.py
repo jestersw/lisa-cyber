@@ -30,7 +30,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.services.agent_builder import compiler, sources, storage, workspace
+from app.services.agent_builder import (
+    compiler,
+    sources,
+    storage,
+    workspace,
+)
+from app.services.agent_builder import (
+    installer as installer_mod,
+)
 
 log = logging.getLogger("lisa.builder")
 
@@ -48,8 +56,13 @@ class BuildError(RuntimeError):
 class BuildResult:
     """Outcome of one end-to-end build.
 
-    On success, `artefacts` and `download_url` are set. On compile failure,
-    `stdout`/`stderr` carry the Nuitka output so the operator can see why.
+    On success, `download_url` points at the raw agent binary and
+    `installer_url` at the self-extracting installer that wraps it. Callers
+    that only care about one artefact can pick whichever they need; both
+    live in the same per-agent storage directory.
+
+    On compile failure, `stdout`/`stderr` carry the Nuitka output so the
+    operator can see why.
     """
 
     success: bool
@@ -58,6 +71,7 @@ class BuildResult:
     stdout: str
     stderr: str
     artefacts: storage.StoredArtefacts | None = None
+    installer_url: str | None = None
 
 
 def build_agent(
@@ -138,7 +152,22 @@ def build_agent(
             root=storage_root,
         )
 
-        log.info("build %s: success, url=%s", agent_id, artefacts.download_url)
+        # 6. Wrap the binary into a self-extracting installer and persist
+        #    that too. Installer lives beside the binary; delivery layer
+        #    (cloud-init, golden template, hand-run) picks whichever it
+        #    needs by URL.
+        installer_path = ws.output_dir / f"installer_{agent_id}.sh"
+        installer_mod.wrap_as_installer(result.binary_path, installer_path, agent_id=agent_id)
+        installer_url = storage.store_installer(
+            agent_id=agent_id, installer=installer_path, root=storage_root
+        )
+
+        log.info(
+            "build %s: success, binary=%s installer=%s",
+            agent_id,
+            artefacts.download_url,
+            installer_url,
+        )
         return BuildResult(
             success=True,
             agent_id=agent_id,
@@ -146,6 +175,7 @@ def build_agent(
             stdout=result.stdout,
             stderr=result.stderr,
             artefacts=artefacts,
+            installer_url=installer_url,
         )
     finally:
         workspace.cleanup(ws)
