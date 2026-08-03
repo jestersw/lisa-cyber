@@ -42,11 +42,30 @@ services:
       - "8000:8000"
     volumes:
       - models:/models
+      - builds:/var/lisa/builds
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  builder:
+    image: lisa-backend:local
+    build: ./backend
+    command: ["python", "-m", "app.services.agent_builder"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
+      REDIS_URL: redis://redis:6379/0
+      LISA_AGENT_SOURCE_ROOT: /agent-src/lisa_agent
+      LISA_BACKEND_URL: ${LISA_BACKEND_URL:-http://backend:8000}
+    volumes:
+      - ./agent:/agent-src:ro
+      - builds:/var/lisa/builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   trainer:
     build: ./ml
@@ -73,3 +92,4 @@ services:
 volumes:
   pgdata:
   models:
+  builds:
