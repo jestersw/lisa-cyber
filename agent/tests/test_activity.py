@@ -219,3 +219,99 @@ def test_run_command_success():
 
 def test_run_command_failure():
     assert run_command("false").success is False
+
+
+# ---------- transition_model integration ----------
+
+
+def _model(counts):
+    """Wrap raw counts in the model envelope agents receive."""
+    return {"version": 1, "counts": counts}
+
+
+def test_pick_next_app_uses_transition_model_when_available():
+    """With a decisive model (all weight on one target), picks that target."""
+    apps = [Application(name=n) for n in ("vscode", "terminal", "firefox")]
+    current = apps[0]  # vscode
+    model = _model({"vscode": {"terminal": 100}})
+    for _ in range(20):
+        chosen = pick_next_app(apps, current, random.Random(), transition_model=model)
+        assert chosen.name == "terminal"
+
+
+def test_pick_next_app_weights_from_model_are_respected():
+    """A skewed model produces a matching skew in choices over many samples."""
+    apps = [Application(name=n) for n in ("vscode", "terminal", "firefox")]
+    current = apps[0]
+    model = _model({"vscode": {"terminal": 90, "firefox": 10}})
+    counts = {"terminal": 0, "firefox": 0}
+    rng = random.Random(0)
+    for _ in range(500):
+        chosen = pick_next_app(apps, current, rng, transition_model=model)
+        counts[chosen.name] += 1
+    # Terminal should heavily dominate. A loose bound catches accidental
+    # inversion (weights swapped) without being flaky.
+    assert counts["terminal"] > counts["firefox"] * 3
+
+
+def test_pick_next_app_falls_back_when_model_absent():
+    """No model given -> old uniform behaviour that avoids current."""
+    apps = [Application(name=n) for n in ("a", "b")]
+    for _ in range(20):
+        chosen = pick_next_app(apps, apps[0], random.Random())
+        assert chosen.name == "b"
+
+
+def test_pick_next_app_falls_back_when_current_unknown_to_model():
+    """Model doesn't have a row for `current` -> fall back, don't crash."""
+    apps = [Application(name=n) for n in ("a", "b")]
+    model = _model({"c": {"a": 10, "b": 10}})  # no row for 'a' or 'b'
+    for _ in range(20):
+        chosen = pick_next_app(apps, apps[0], random.Random(), transition_model=model)
+        # Fallback avoids current, so should always be 'b'.
+        assert chosen.name == "b"
+
+
+def test_pick_next_app_falls_back_when_model_next_apps_not_in_apps():
+    """Model knows the current app but its `next` names don't overlap with
+    the agent's app list -> fall back rather than returning None."""
+    apps = [Application(name=n) for n in ("a", "b")]
+    model = _model({"a": {"unknown_x": 50, "unknown_y": 50}})
+    for _ in range(20):
+        chosen = pick_next_app(apps, apps[0], random.Random(), transition_model=model)
+        assert chosen.name == "b"
+
+
+def test_pick_next_app_falls_back_on_garbled_model():
+    """Model shape is wrong -> ignore silently, keep serving the agent."""
+    apps = [Application(name=n) for n in ("a", "b")]
+    for garbled in (
+        {"version": 1},  # no counts key
+        {"counts": "not a dict"},
+        {"counts": {"a": "not a dict"}},
+        {"counts": {"a": {}}},  # row exists but is empty
+    ):
+        for _ in range(5):
+            chosen = pick_next_app(apps, apps[0], random.Random(), transition_model=garbled)
+            assert chosen.name == "b"  # uniform fallback avoiding current
+
+
+def test_pick_next_app_ignores_non_numeric_weights():
+    """Model row has garbage numeric values -> skip them, use what's valid."""
+    apps = [Application(name=n) for n in ("a", "b", "c")]
+    model = _model({"a": {"b": "not_a_number", "c": 100}})
+    for _ in range(20):
+        chosen = pick_next_app(apps, apps[0], random.Random(), transition_model=model)
+        assert chosen.name == "c"
+
+
+def test_pick_next_app_no_current_falls_back_to_uniform():
+    """No current app to look up in the model -> uniform choice."""
+    apps = [Application(name=n) for n in ("a", "b")]
+    model = _model({"a": {"b": 100}})
+    # With current=None, the model can't help. Both apps should appear.
+    seen = set()
+    rng = random.Random(0)
+    for _ in range(50):
+        seen.add(pick_next_app(apps, None, rng, transition_model=model).name)
+    assert seen == {"a", "b"}

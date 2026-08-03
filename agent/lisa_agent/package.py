@@ -141,6 +141,11 @@ class DeploymentPackage:
     behavior: BehaviorConfig
     heartbeat: HeartbeatConfig
     applications: list[Application]
+    # Optional markov model of app-to-app transitions, produced by the
+    # backend and consumed by pick_next_app. Stored as the raw dict so
+    # activity.py can read `counts` without importing extra types.
+    # None -> uniform random fallback. See docs/agent-config-schema.md.
+    transition_model: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DeploymentPackage:
@@ -177,6 +182,7 @@ class DeploymentPackage:
             behavior=BehaviorConfig.from_dict(agent_config.get("behavior")),
             heartbeat=HeartbeatConfig.from_dict(agent_config.get("heartbeat")),
             applications=applications,
+            transition_model=_transition_model_from(agent_config.get("transition_model")),
         )
 
     @classmethod
@@ -188,3 +194,13 @@ class DeploymentPackage:
         except json.JSONDecodeError as exc:
             raise PackageError(f"deployment package is not valid JSON: {exc}") from exc
         return cls.from_dict(data)
+
+
+def _transition_model_from(raw: object) -> dict[str, Any] | None:
+    """Accept the transition_model field verbatim if it's a dict, drop it
+    otherwise. We don't validate the model's inner shape here — pick_next_app
+    is defensive about missing keys / wrong types, so a garbled model gracefully
+    falls back to uniform choice instead of crashing at startup."""
+    if isinstance(raw, dict):
+        return raw
+    return None

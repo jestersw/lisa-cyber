@@ -227,10 +227,67 @@ def pick_next_app(
     apps: list[Application],
     current: Application | None = None,
     rng: random.Random | None = None,
+    transition_model: dict | None = None,
 ) -> Application | None:
-    """Choose the next app, avoiding the current one when possible."""
+    """Choose the next app.
+
+    If a `transition_model` is supplied and it has counts for the current
+    app that overlap with `apps`, the next app is sampled weighted by those
+    counts (see docs/agent-config-schema.md for the model format).
+
+    Otherwise falls back to a uniform choice that avoids the current app
+    when possible. The fallback preserves the pre-ML behaviour so agents
+    without a model in their config keep working.
+    """
     if not apps:
         return None
     rng = rng or random.Random()
+
+    weighted = _weighted_next_from_model(apps, current, transition_model, rng)
+    if weighted is not None:
+        return weighted
+
     candidates = [a for a in apps if current is None or a.name != current.name]
     return rng.choice(candidates or apps)
+
+
+def _weighted_next_from_model(
+    apps: list[Application],
+    current: Application | None,
+    transition_model: dict | None,
+    rng: random.Random,
+) -> Application | None:
+    """Try to pick the next app from the markov model. Returns None if the
+    model isn't usable for this transition (missing, unknown current app,
+    no overlap with available apps) so the caller can fall back."""
+    if not transition_model or current is None:
+        return None
+    counts = transition_model.get("counts")
+    if not isinstance(counts, dict):
+        return None
+    row = counts.get(current.name)
+    if not isinstance(row, dict) or not row:
+        return None
+
+    # Only apps we actually have (and can weight positively) are candidates.
+    # A model trained on a different app set is normal; we just skip the
+    # names we don't recognise and use whatever overlap remains.
+    apps_by_name = {a.name: a for a in apps}
+    candidates: list[Application] = []
+    weights: list[float] = []
+    for next_name, weight in row.items():
+        app = apps_by_name.get(next_name)
+        if app is None:
+            continue
+        try:
+            w = float(weight)
+        except (TypeError, ValueError):
+            continue
+        if w <= 0:
+            continue
+        candidates.append(app)
+        weights.append(w)
+
+    if not candidates:
+        return None
+    return rng.choices(candidates, weights=weights, k=1)[0]
