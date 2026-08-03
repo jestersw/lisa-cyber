@@ -74,6 +74,7 @@ class FakeAgent:
         self.config = config
         self.agent_token = None
         self.binary_url = None
+        self.installer_url = None
 
 
 class FakeSession:
@@ -317,3 +318,32 @@ def test_run_survives_redis_errors(tmp_path):
 
     with patch("app.services.agent_builder.worker.time.sleep"):
         run(redis_client=redis, config=config, stop_flag=OneShotFlag())
+
+
+def test_process_writes_installer_url_on_success(tmp_path):
+    """Worker must record BOTH binary_url and installer_url after a
+    successful build — the migration exists for this."""
+    agent = FakeAgent("USR001", config={"agent_info": {"role": "dev"}})
+    config = WorkerConfig(agent_source_root=tmp_path, backend_url="http://b")
+
+    fake_result = MagicMock()
+    fake_result.success = True
+    fake_result.download_url = "/api/builds/USR001/agent_USR001"
+    fake_result.installer_url = "/api/builds/USR001/installer_USR001.sh"
+
+    with (
+        _patched(agent) as (session_factory, _),
+        patch(
+            "app.services.agent_builder.worker.build_agent",
+            return_value=fake_result,
+        ),
+    ):
+        process_one_job(
+            json.dumps({"agent_id": "USR001"}),
+            config,
+            session_factory=session_factory,
+        )
+
+    assert agent.status == "ready"
+    assert agent.binary_url == "/api/builds/USR001/agent_USR001"
+    assert agent.installer_url == "/api/builds/USR001/installer_USR001.sh"
