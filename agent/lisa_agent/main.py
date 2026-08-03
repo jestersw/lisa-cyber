@@ -103,6 +103,7 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
             int(behavior.inactive_period.min),
             int(behavior.inactive_period.max),
         ),
+        transition_model=pkg.transition_model,
     )
     return agent
 

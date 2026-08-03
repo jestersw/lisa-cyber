@@ -46,6 +46,7 @@ class Agent:
         session_max: int = 1800,
         switch_pause_range: tuple[int, int] = (5, 20),
         inactive_period_range: tuple[int, int] = (10, 20),
+        transition_model: dict | None = None,
     ) -> None:
         self.schedule = schedule
         self.apps = apps
@@ -59,6 +60,10 @@ class Agent:
         self.session_max = session_max
         self.switch_pause_range = switch_pause_range
         self.inactive_period_range = inactive_period_range
+        # Optional markov model that drives pick_next_app when present.
+        # See docs/agent-config-schema.md for the format; agent uses only
+        # `counts` — `trained_on` and `version` are for operator debugging.
+        self.transition_model = transition_model
 
         self.running = False
         self.current_app: Application | None = None
@@ -145,7 +150,12 @@ class Agent:
                 if not self.running:
                     break
 
-                next_app = pick_next_app(self.apps, self.current_app, self.rng)
+                next_app = pick_next_app(
+                    self.apps,
+                    self.current_app,
+                    self.rng,
+                    transition_model=self.transition_model,
+                )
                 if next_app and self.engine.open_app(next_app):
                     self.current_app = next_app
                     self.session_started = time.monotonic()

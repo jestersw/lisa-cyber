@@ -182,3 +182,37 @@ def test_agent_identity_from_dict_ok():
         {"agent_id": "x", "name": "n", "role": "developer", "os_type": "linux"}
     )
     assert ident.agent_id == "x"
+
+
+# ---------- transition_model ----------
+
+
+def test_transition_model_parsed_verbatim():
+    """A well-formed model is passed through to the DeploymentPackage as-is."""
+    data = sample_package()
+    data["agent_config"]["transition_model"] = {
+        "version": 1,
+        "trained_on": "role:developer",
+        "counts": {"editor": {"browser": 42}},
+    }
+    pkg = DeploymentPackage.from_dict(data)
+    assert pkg.transition_model == {
+        "version": 1,
+        "trained_on": "role:developer",
+        "counts": {"editor": {"browser": 42}},
+    }
+
+
+def test_transition_model_absent_is_none():
+    """No `transition_model` in agent_config -> None (fallback signal)."""
+    pkg = DeploymentPackage.from_dict(sample_package())
+    assert pkg.transition_model is None
+
+
+def test_transition_model_wrong_type_becomes_none():
+    """A non-dict transition_model (garbled config) is dropped, not raised."""
+    for bad in ("just a string", 42, [1, 2, 3], None):
+        data = sample_package()
+        data["agent_config"]["transition_model"] = bad
+        pkg = DeploymentPackage.from_dict(data)
+        assert pkg.transition_model is None
