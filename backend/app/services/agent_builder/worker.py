@@ -147,8 +147,14 @@ def process_one_job(
         if result.success:
             agent.status = "ready"
             agent.binary_url = result.download_url
+            agent.installer_url = result.installer_url
             session.commit()
-            log.info("build %s ready: %s", agent_id, result.download_url)
+            log.info(
+                "build %s ready: binary=%s installer=%s",
+                agent_id,
+                result.download_url,
+                result.installer_url,
+            )
         else:
             log.warning("build %s: nuitka rejected the code", agent_id)
             _mark_failed(session, agent)
