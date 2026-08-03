@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,7 @@ from app.models.models import (
     Role,
 )
 from app.models_store import get_store, restrict_model
+from app.ratelimit import get_redis
 from app.schemas import (
     AgentConfig,
     AgentConfigSpec,
@@ -23,8 +25,27 @@ from app.schemas import (
     DeploymentPackage,
 )
 from app.security import require_agent_token
+from app.services.agent_builder.worker import enqueue_build
+
+log = logging.getLogger("lisa.agents")
 
 router = APIRouter()
+
+
+def _queue_build(db: Session, agent: Agent) -> bool:
+    redis_client = get_redis()
+    if redis_client is None:
+        log.warning("redis unavailable, agent %s stays configured", agent.agent_id)
+        return False
+    try:
+        enqueue_build(redis_client, agent.agent_id)
+    except Exception as exc:
+        log.warning("could not enqueue build for %s: %s", agent.agent_id, exc)
+        return False
+    agent.status = "building"
+    db.commit()
+    db.refresh(agent)
+    return True
 
 
 @router.post("/agents/generate", response_model=AgentGenerateResponse)
@@ -82,6 +103,8 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_agent)
 
+    queued = _queue_build(db, db_agent)
+
     return AgentGenerateResponse(
         agent_id=agent_id,
         message=f"Agent '{config.name}' configured",
@@ -91,6 +114,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
             "os_type": config.os_type.value,
             "role": role_name,
             "template_id": config.template_id,
+            "build_queued": queued,
         },
         config_url=f"/api/agents/{agent_id}/config",
         status_url=f"/api/agents/{agent_id}/status",
