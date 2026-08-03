@@ -62,7 +62,7 @@ to the agent.
 ### Field notes
 
 - `agent_info.role` — one of `developer`, `admin`, `user`.
-- `agent_info.os_type` — `linux` or `windows`.
+- `agent_info.os_type` — `linux`, `macos`, or `windows`.
 - `schedule.workdays` — ISO weekdays, 1=Mon … 7=Sun.
 - `schedule.work_start` / `work_end` — `HH:MM`, local time. Produced by the
   default-filler (section 4) when the user leaves them blank.
