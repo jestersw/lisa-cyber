@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   endpoints,
+  BASE_URL,
   type AgentStatus,
   type DeploymentPackage,
   type HeartbeatLog,
@@ -29,13 +30,68 @@ export function AgentDetail() {
     if (!agentId) {
       return;
     }
+    let active = true;
+
     endpoints
-      .agentStatus(agentId)
-      .then(setStatus)
-      .catch((err: Error) => setError(err.message));
-    endpoints.agentHeartbeats(agentId).then(setHeartbeats).catch(() => setHeartbeats(null));
-    endpoints.agentConfig(agentId).then(setPkg).catch(() => setPkg(null));
-    endpoints.nextActivity(agentId).then(setPrediction).catch(() => setPrediction(null));
+      .agentConfig(agentId)
+      .then((value) => {
+        if (active) {
+          setPkg(value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setPkg(null);
+        }
+      });
+
+    const load = () => {
+      endpoints
+        .agentStatus(agentId)
+        .then((value) => {
+          if (active) {
+            setStatus(value);
+            setError(null);
+          }
+        })
+        .catch((err: Error) => {
+          if (active) {
+            setError(err.message);
+          }
+        });
+      endpoints
+        .agentHeartbeats(agentId)
+        .then((value) => {
+          if (active) {
+            setHeartbeats(value);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setHeartbeats(null);
+          }
+        });
+      endpoints
+        .nextActivity(agentId)
+        .then((value) => {
+          if (active) {
+            setPrediction(value);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setPrediction(null);
+          }
+        });
+    };
+
+    load();
+    const timer = setInterval(load, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [agentId]);
 
   if (error) {
@@ -64,6 +120,21 @@ export function AgentDetail() {
         {agent?.role ?? "no role"} · {agent?.os_type ?? "-"} · last seen{" "}
         {formatTime(agent?.last_seen ?? null)}
       </p>
+
+      {agent && (agent.installer_url || agent.binary_url) && (
+        <div className="actions">
+          {agent.installer_url && (
+            <a className="btn primary" href={`${BASE_URL}${agent.installer_url}`} download>
+              Download installer
+            </a>
+          )}
+          {agent.binary_url && (
+            <a className="btn" href={`${BASE_URL}${agent.binary_url}`} download>
+              Download raw binary
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="stat-grid">
         <div className="card">
