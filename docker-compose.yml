@@ -52,6 +52,7 @@ services:
   builder:
     image: lisa-backend:local
     build: ./backend
+    platform: linux/amd64
     command: ["python", "-m", "app.services.agent_builder"]
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
