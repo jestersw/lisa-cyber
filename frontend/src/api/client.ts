@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 let authToken: string | null = null;
 
@@ -96,6 +96,8 @@ export interface AgentStatus {
     os_type: string;
     role: string | null;
     last_seen: string | null;
+    binary_url: string | null;
+    installer_url: string | null;
   };
   recent_activities: {
     id: number;
