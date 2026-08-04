@@ -392,7 +392,7 @@ def test_installer_can_be_run_end_to_end(tmp_path):
         output_dir = kwargs.get("output_dir") or args[1]
         binary_name = kwargs.get("binary_name") or args[2]
         binary_path = output_dir / binary_name
-        binary_path.write_text(f"#!/bin/sh\necho ran > '{marker}'\n")
+        binary_path.write_text(f"#!/bin/sh\necho ran > '{marker}'\nsleep 5\n")
         binary_path.chmod(0o755)
         return compiler.CompileResult(
             success=True,
