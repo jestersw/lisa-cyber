@@ -5,4 +5,4 @@ psycopg[binary]==3.2.3
 pydantic==2.10.4
 pydantic-settings==2.7.0
 alembic==1.14.0
-redis==5.2.1
+redis==8.1.0
