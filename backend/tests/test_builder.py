@@ -412,8 +412,8 @@ def test_installer_can_be_run_end_to_end(tmp_path):
         # patch the default install dir so we don't try to write to /opt/lisa
         patch(
             "app.services.agent_builder.builder.installer_mod.wrap_as_installer",
-            side_effect=lambda binary, out, *, agent_id, install_dir=str(install_dir): (
-                _orig_wrap(binary, out, agent_id=agent_id, install_dir=install_dir)
+            side_effect=lambda binary, out, *, agent_id, install_dir=str(install_dir): _orig_wrap(
+                binary, out, agent_id=agent_id, install_dir=install_dir
             ),
         ),
     ):

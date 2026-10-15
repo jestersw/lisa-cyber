@@ -1,11 +1,11 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class OSType(str, Enum):
+class OSType(StrEnum):
     LINUX = "linux"
     MACOS = "macos"
     WINDOWS = "windows"
