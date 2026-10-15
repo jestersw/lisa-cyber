@@ -8,7 +8,6 @@ from lisa_agent.package import (
     PackageError,
 )
 
-
 # ---------- fixtures ----------
 
 

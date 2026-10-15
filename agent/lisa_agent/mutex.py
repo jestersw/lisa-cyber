@@ -21,7 +21,7 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 log = logging.getLogger("lisa-agent.mutex")
@@ -88,7 +88,7 @@ class AgentMutex:
             info = {
                 "pid": os.getpid(),
                 "identity": self.identity,
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
             }
             self._file.write(json.dumps(info, indent=2))
             self._file.flush()

@@ -2,8 +2,8 @@ import random
 
 from lisa_agent.activity import (
     Activity,
-    Application,
     ActivityEngine,
+    Application,
     Command,
     CommandResult,
     pick_next_app,

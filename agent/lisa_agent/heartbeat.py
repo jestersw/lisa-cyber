@@ -18,7 +18,7 @@ import logging
 import platform
 import threading
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -44,7 +44,7 @@ def build_payload(
 ) -> dict[str, Any]:
     """Assemble a heartbeat body. Mirrors the original payload shape."""
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "agent_id": agent_id,
         "status": status,
         "system_info": system_info(),
@@ -132,7 +132,7 @@ class HeartbeatLoop:
         """Send one heartbeat right now (e.g. at startup or shutdown)."""
         ok = self.sender.send(self.payload_provider())
         if ok:
-            self.last_heartbeat = datetime.now(timezone.utc)
+            self.last_heartbeat = datetime.now(UTC)
         return ok
 
     def _loop(self) -> None:
