@@ -287,11 +287,31 @@ class PluginExecution(BaseModel):
 
 
 class PluginCommand(BaseModel):
-    type: Literal["key", "key_combination", "type_text"]
+    type: Literal[
+        "key",
+        "key_combination",
+        "type_text",
+        # network + file activity (#213)
+        "http_request",
+        "dns_lookup",
+        "ldap_query",
+        "file_create",
+        "file_rename",
+        "file_copy",
+        "file_delete",
+    ]
     delay: float = 0
+    # keystroke fields
     key: str | None = None
     keys: str | None = None
     text: str | None = None
+    # network fields
+    url: str | None = None
+    host: str | None = None
+    port: int | None = None
+    # file fields (plain names; the agent sandboxes them)
+    target: str | None = None
+    dest: str | None = None
 
 
 class PluginActivity(BaseModel):

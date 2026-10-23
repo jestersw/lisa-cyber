@@ -227,3 +227,43 @@ def test_generate_plugin_retries_until_valid(client):
     plugin = generate_plugin("discord", "linux")
     assert plugin is not None
     assert provider.calls == 3
+
+
+def test_parse_plugin_accepts_network_and_file_commands():
+    import json as _json
+
+    from app.llm import parse_plugin
+
+    raw = _json.dumps(
+        {
+            "app_info": {"name": "browser"},
+            "execution": {"open_command": "firefox"},
+            "activities": [
+                {
+                    "id": "browse",
+                    "name": "Browse",
+                    "weight": 100,
+                    "commands": [
+                        {"type": "http_request", "url": "https://intranet.corp.local", "delay": 1},
+                        {"type": "dns_lookup", "host": "mail.corp.local", "delay": 1},
+                        {"type": "ldap_query", "host": "dc.corp.local", "port": 389, "delay": 1},
+                        {"type": "file_create", "target": "notes.txt", "delay": 1},
+                        {
+                            "type": "file_copy",
+                            "target": "notes.txt",
+                            "dest": "notes.bak",
+                            "delay": 1,
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+    plugin = parse_plugin(raw)
+    assert plugin is not None
+    cmds = plugin["activities"][0]["commands"]
+    types = [c["type"] for c in cmds]
+    assert types == ["http_request", "dns_lookup", "ldap_query", "file_create", "file_copy"]
+    assert cmds[0]["url"] == "https://intranet.corp.local"
+    assert cmds[2]["port"] == 389
+    assert cmds[4]["dest"] == "notes.bak"

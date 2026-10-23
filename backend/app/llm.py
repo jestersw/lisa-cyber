@@ -111,11 +111,19 @@ def build_plugin_prompt(name: str, os_type: str, description: str | None = None)
         "activities (array of objects with id, name, weight, min_duration, max_duration, "
         "and commands array), "
         "settings (usage_probability, work_hours_only). "
-        "Each command object has type set to one of key, key_combination or type_text, "
-        "a delay in seconds, and then key for key, keys for key_combination, "
-        "or text for type_text. "
-        "The id fields are strings. Commands are keyboard actions performed with xdotool, "
-        "never shell commands. Follow this example exactly: "
+        "Each command object has a type and a delay in seconds. Supported types and "
+        "their fields: key (key), key_combination (keys, e.g. ctrl+s), type_text (text); "
+        "and these that generate real OS telemetry for monitoring: "
+        "http_request (url, http/https only), dns_lookup (host), "
+        "ldap_query (host, optional port), "
+        "file_create (target), file_rename (target, dest), file_copy (target, dest), "
+        "file_delete (target). target/dest are plain file names with no path separators. "
+        "Include at least one network or file command among the activities so the agent "
+        "produces network/file events, not just keystrokes. Use hostnames/URLs that fit the "
+        "role on an internal corporate range (e.g. intranet.corp.local), not public sites. "
+        "The id fields are strings. Keystroke commands map to xdotool/osascript and the "
+        "others to safe shell tools; never write raw shell commands yourself. "
+        "Follow this example exactly: "
         '{"app_info": {"name": "slack", "display_name": "Slack", "category": "communication"}, '
         '"installation": {"check_command": "slack --version", "install_method": "apt", '
         '"install_commands": ["sudo apt-get install -y slack"], "post_install_commands": [], '
@@ -125,10 +133,11 @@ def build_plugin_prompt(name: str, os_type: str, description: str | None = None)
         '"activities": [{"id": "read_messages", "name": "Read messages", "weight": 60, '
         '"min_duration": 20, "max_duration": 90, "commands": ['
         '{"type": "key", "key": "Down", "delay": 1}, '
-        '{"type": "key_combination", "keys": "ctrl+k", "delay": 2}]}, '
+        '{"type": "http_request", "url": "https://intranet.corp.local/api/conversations", '
+        '"delay": 2}]}, '
         '{"id": "reply", "name": "Reply", "weight": 40, "min_duration": 15, "max_duration": 45, '
         '"commands": [{"type": "type_text", "text": "on it", "delay": 1}, '
-        '{"type": "key", "key": "Return", "delay": 1}]}], '
+        '{"type": "file_create", "target": "draft.txt", "delay": 1}]}], '
         '"settings": {"usage_probability": 0.8, "work_hours_only": true}}. '
         "Give between two and five realistic activities. "
         "Every weight must be above zero and they should sum to about 100. "
