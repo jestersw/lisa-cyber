@@ -422,3 +422,73 @@ def test_application_resolves_linux_commands():
     assert app.open_cmd == "discord"
     assert app.close_cmd == "pkill -f discord"
     assert app.install_commands == ["apt install -y discord"]
+
+
+# ---------- network + file activity (#213) ----------
+
+SANDBOX = '"$HOME/.lisa/activity"'
+
+
+def test_http_request_uses_curl():
+    out = Command("http_request", url="https://intranet.range.local/wiki").to_shell("linux")
+    assert out == "curl -s -o /dev/null --max-time 15 'https://intranet.range.local/wiki'"
+    # same on macOS (POSIX, OS-neutral)
+    assert Command("http_request", url="http://x.local").to_shell("macos").startswith("curl ")
+
+
+def test_http_request_rejects_non_http_scheme():
+    assert Command("http_request", url="file:///etc/passwd").to_shell("linux") is None
+    assert Command("http_request", url=None).to_shell("linux") is None
+
+
+def test_dns_lookup_uses_nslookup():
+    out = Command("dns_lookup", host="mail.range.local").to_shell("linux")
+    assert out == "nslookup 'mail.range.local' >/dev/null 2>&1"
+
+
+def test_dns_lookup_rejects_bad_host():
+    assert Command("dns_lookup", host="bad;rm -rf /").to_shell("linux") is None
+
+
+def test_ldap_query_opens_tcp_to_port():
+    out = Command("ldap_query", host="dc.range.local").to_shell("linux")
+    assert out == "nc -z -w 3 'dc.range.local' 389 >/dev/null 2>&1"
+    out2 = Command("ldap_query", host="dc.range.local", port=636).to_shell("linux")
+    assert "636" in out2
+
+
+def test_file_create_is_sandboxed():
+    out = Command("file_create", target="report.txt").to_shell("linux")
+    assert out == f"mkdir -p {SANDBOX} && touch {SANDBOX}/report.txt"
+
+
+def test_file_rename_and_copy():
+    r = Command("file_rename", target="a.txt", dest="b.txt").to_shell("linux")
+    assert r == f"mkdir -p {SANDBOX} && mv {SANDBOX}/a.txt {SANDBOX}/b.txt"
+    c = Command("file_copy", target="a.txt", dest="b.txt").to_shell("linux")
+    assert c == f"mkdir -p {SANDBOX} && cp {SANDBOX}/a.txt {SANDBOX}/b.txt"
+
+
+def test_file_delete():
+    assert Command("file_delete", target="a.txt").to_shell("linux") == f"rm -f {SANDBOX}/a.txt"
+
+
+def test_file_ops_reject_path_traversal():
+    assert Command("file_create", target="../escape").to_shell("linux") is None
+    assert Command("file_create", target="sub/dir").to_shell("linux") is None
+    assert Command("file_rename", target="ok.txt", dest="../evil").to_shell("linux") is None
+    assert Command("file_delete", target="..").to_shell("linux") is None
+
+
+def test_network_file_types_are_os_neutral():
+    # Network/file commands resolve the same regardless of OS.
+    for cmd in (
+        Command("dns_lookup", host="x.local"),
+        Command("file_create", target="f.txt"),
+    ):
+        assert cmd.to_shell("linux") == cmd.to_shell("macos")
+
+
+def test_command_from_dict_parses_new_fields():
+    c = Command.from_dict({"type": "ldap_query", "host": "dc.local", "port": 636, "delay": 2})
+    assert c.type == "ldap_query" and c.host == "dc.local" and c.port == 636 and c.delay == 2.0

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import subprocess
 import time
 from collections.abc import Callable
@@ -112,6 +113,72 @@ def _sh_squote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
+# --- network + file activity (#213) ---
+
+# Per-user sandbox for file activity. Embedded as a shell literal so $HOME
+# expands on the target and nothing is ever written outside this directory.
+ACTIVITY_DIR = '"$HOME/.lisa/activity"'
+
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+_SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+$")
+
+
+def _safe_name(name: str | None) -> str | None:
+    """A plain filename (no path separators, no traversal) or None."""
+    if not name or name in (".", "..") or not _SAFE_NAME.match(name):
+        return None
+    return name
+
+
+def _http_request(url: str | None) -> str | None:
+    if not url or not url.startswith(("http://", "https://")):
+        return None
+    return f"curl -s -o /dev/null --max-time 15 {_sh_squote(url)}"
+
+
+def _dns_lookup(host: str | None) -> str | None:
+    if not host or not _SAFE_HOST.match(host):
+        return None
+    return f"nslookup {_sh_squote(host)} >/dev/null 2>&1"
+
+
+def _ldap_query(host: str | None, port: int | None) -> str | None:
+    # No ldapsearch is guaranteed on a target, so we open a TCP connection to
+    # the LDAP port — enough to produce the network event monitoring looks for.
+    if not host or not _SAFE_HOST.match(host):
+        return None
+    p = port or 389
+    if not (0 < p < 65536):
+        return None
+    return f"nc -z -w 3 {_sh_squote(host)} {p} >/dev/null 2>&1"
+
+
+def _file_in_sandbox(name: str) -> str:
+    return f"{ACTIVITY_DIR}/{name}"
+
+
+def _file_create(target: str | None) -> str | None:
+    name = _safe_name(target)
+    if name is None:
+        return None
+    return f"mkdir -p {ACTIVITY_DIR} && touch {_file_in_sandbox(name)}"
+
+
+def _file_two_arg(tool: str, target: str | None, dest: str | None) -> str | None:
+    src = _safe_name(target)
+    dst = _safe_name(dest)
+    if src is None or dst is None:
+        return None
+    return f"mkdir -p {ACTIVITY_DIR} && {tool} {_file_in_sandbox(src)} {_file_in_sandbox(dst)}"
+
+
+def _file_delete(target: str | None) -> str | None:
+    name = _safe_name(target)
+    if name is None:
+        return None
+    return f"rm -f {_file_in_sandbox(name)}"
+
+
 def _osascript(action: str) -> str:
     """A shell command that runs one System Events action via osascript."""
     return "osascript -e " + _sh_squote(f'tell application "System Events" to {action}')
@@ -184,28 +251,64 @@ class Command:
     key: str | None = None
     keys: str | None = None
     text: str | None = None
+    # network / file activity (#213)
+    url: str | None = None
+    host: str | None = None
+    port: int | None = None
+    target: str | None = None  # filename inside the activity sandbox
+    dest: str | None = None  # second filename (rename/copy)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Command:
+        port = data.get("port")
         return cls(
             type=data.get("type", ""),
             delay=float(data.get("delay", 0.0)),
             key=data.get("key"),
             keys=data.get("keys"),
             text=data.get("text"),
+            url=data.get("url"),
+            host=data.get("host"),
+            port=int(port) if port is not None else None,
+            target=data.get("target"),
+            dest=data.get("dest"),
         )
 
     def to_shell(self, os_name: str | None = None) -> str | None:
         """Translate this command to a shell string for the agent's OS.
 
-        Linux uses xdotool; macOS uses osascript (System Events), since
-        xdotool doesn't exist there (#205). Returns None for an unknown or
-        unmappable command so the caller skips it.
+        Network and file activity (#213) is POSIX-portable, so it resolves the
+        same on Linux and macOS. Keystroke activity differs: Linux uses
+        xdotool, macOS uses osascript (System Events, #205). Returns None for
+        an unknown or unmappable command so the caller skips it.
         """
+        shared = self._to_shared()
+        if shared is not None:
+            return shared
         os_name = os_name or current_os()
         if os_name == "macos":
             return self._to_macos()
         return self._to_xdotool()
+
+    def _to_shared(self) -> str | None:
+        """OS-neutral activity types (network + file), using POSIX tools that
+        exist on Linux and macOS. Returns None for the keystroke types, which
+        the OS-specific methods handle."""
+        if self.type == "http_request":
+            return _http_request(self.url)
+        if self.type == "dns_lookup":
+            return _dns_lookup(self.host)
+        if self.type == "ldap_query":
+            return _ldap_query(self.host, self.port)
+        if self.type == "file_create":
+            return _file_create(self.target)
+        if self.type == "file_rename":
+            return _file_two_arg("mv", self.target, self.dest)
+        if self.type == "file_copy":
+            return _file_two_arg("cp", self.target, self.dest)
+        if self.type == "file_delete":
+            return _file_delete(self.target)
+        return None
 
     def _to_xdotool(self) -> str | None:
         if self.type == "key" and self.key:
