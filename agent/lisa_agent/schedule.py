@@ -22,7 +22,7 @@ class State(str, Enum):
 
 
 def _parse(hhmm: str) -> time:
-    return datetime.strptime(hhmm, "%H:%M").time()  # noqa: DTZ007
+    return datetime.strptime(hhmm, "%H:%M").time()
 
 
 def is_workday(now: datetime, schedule: WorkSchedule) -> bool:
