@@ -47,6 +47,8 @@ class Agent:
         switch_pause_range: tuple[int, int] = (5, 20),
         inactive_period_range: tuple[int, int] = (10, 20),
         transition_model: dict | None = None,
+        next_app_provider: Callable[[list[Application], Application | None], Application | None]
+        | None = None,
     ) -> None:
         self.schedule = schedule
         self.apps = apps
@@ -64,6 +66,10 @@ class Agent:
         # See docs/agent-config-schema.md for the format; agent uses only
         # `counts` — `trained_on` and `version` are for operator debugging.
         self.transition_model = transition_model
+        # Optional live next-app source (the backend ML endpoint, #57). When it
+        # returns None — backend unreachable or no model — we fall back to the
+        # local pick_next_app below, so the agent never depends on the network.
+        self.next_app_provider = next_app_provider
 
         self.running = False
         self.current_app: Application | None = None
@@ -150,12 +156,20 @@ class Agent:
                 if not self.running:
                     break
 
-                next_app = pick_next_app(
-                    self.apps,
-                    self.current_app,
-                    self.rng,
-                    transition_model=self.transition_model,
-                )
+                next_app = None
+                if self.next_app_provider is not None:
+                    try:
+                        next_app = self.next_app_provider(self.apps, self.current_app)
+                    except Exception:
+                        # A flaky provider must never stop the loop; fall back locally.
+                        log.debug("next_app_provider raised, falling back locally", exc_info=True)
+                if next_app is None:
+                    next_app = pick_next_app(
+                        self.apps,
+                        self.current_app,
+                        self.rng,
+                        transition_model=self.transition_model,
+                    )
                 if next_app and self.engine.open_app(next_app):
                     self.current_app = next_app
                     self.session_started = time.monotonic()
