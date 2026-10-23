@@ -145,12 +145,17 @@ def build_agent(
         # 3. Write the .env the agent will read at runtime.
         _write_env(ws.env_file, agent_token=agent_token, backend_url=backend_url)
 
-        # 4. Compile. This is where most real failures land.
+        # 4. Compile. This is where most real failures land. The entry lives
+        #    inside the copied package dir (e.g. lisa_agent/main.py) so the
+        #    agent's absolute `lisa_agent.*` imports resolve with the workspace
+        #    agent_dir on the path.
         binary_name = f"agent_{agent_id}"
+        entry_file = f"{agent_source_root.name}/{sources.ENTRY_FILE}"
         result = compiler.compile_agent(
             source_dir=ws.agent_dir,
             output_dir=ws.output_dir,
             binary_name=binary_name,
+            entry_file=entry_file,
         )
 
         if not result.success:

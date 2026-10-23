@@ -35,11 +35,16 @@ class SourcesError(RuntimeError):
 
 
 def copy_agent_sources(source_root: Path, target_dir: Path) -> list[Path]:
-    """Copy every *.py file from source_root into target_dir.
+    """Copy the agent package into target_dir, preserving the package dir.
 
     - source_root should point at the `lisa_agent` package (the directory
       containing main.py, activity.py, etc.).
     - target_dir must already exist (workspace.create() makes it).
+    - The sources land under `target_dir/<package>/` (e.g. `lisa_agent/`), NOT
+      flattened into target_dir. The agent uses absolute imports
+      (`from lisa_agent.activity import ...`), so the package directory must
+      survive into the build or Nuitka can't resolve them. The compiler then
+      targets `<package>/main.py` with target_dir on the path.
     - Returns the list of paths copied, for logging and asserts.
 
     Raises SourcesError if source_root doesn't exist, isn't a directory,
@@ -54,15 +59,16 @@ def copy_agent_sources(source_root: Path, target_dir: Path) -> list[Path]:
     if not target_dir.exists():
         raise SourcesError(f"target directory does not exist: {target_dir}")
 
+    package_dir = target_dir / source_root.name
     copied: list[Path] = []
     for src in _iter_python_sources(source_root):
         rel = src.relative_to(source_root)
-        dst = target_dir / rel
+        dst = package_dir / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
         copied.append(dst)
 
-    log.info("copied %d source files from %s to %s", len(copied), source_root, target_dir)
+    log.info("copied %d source files from %s to %s", len(copied), source_root, package_dir)
     return copied
 
 
