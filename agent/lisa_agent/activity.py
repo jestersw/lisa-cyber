@@ -24,7 +24,49 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from lisa_agent.platform_ops import current_os
+
 log = logging.getLogger("lisa-agent.activity")
+
+
+def resolve_os_command(value: Any, os_name: str) -> str | None:
+    """Resolve a plugin command that may be OS-specific (issue #197).
+
+    A command field is either a plain string (shared across every OS) or an
+    object keyed by OS name, e.g.::
+
+        {"linux": "discord", "macos": "open -a Discord", "default": "discord"}
+
+    For an object we return the entry for `os_name`, then `default`, else None
+    (the engine treats a missing open/close command as "nothing to run").
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        picked = value.get(os_name) or value.get("default")
+        return picked if isinstance(picked, str) else None
+    return None
+
+
+def resolve_os_commands(value: Any, os_name: str) -> list[str]:
+    """Like resolve_os_command but for list-valued fields (install commands).
+
+    Accepts a list (shared), or an object mapping OS name -> list, with an
+    optional `default` list. Returns [] when nothing applies to this OS.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [c for c in value if isinstance(c, str)]
+    if isinstance(value, dict):
+        picked = value.get(os_name)
+        if picked is None:
+            picked = value.get("default")
+        if isinstance(picked, list):
+            return [c for c in picked if isinstance(c, str)]
+    return []
 
 
 @dataclass
@@ -139,20 +181,26 @@ class Application:
     usage_probability: float = 1.0
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Application:
+    def from_dict(cls, data: dict[str, Any], os_name: str | None = None) -> Application:
+        """Build an Application, resolving any OS-specific command fields for
+        `os_name` (defaults to the OS the agent is running on). See
+        resolve_os_command for the per-OS plugin format (#197)."""
+        os_name = os_name or current_os()
         info = data.get("app_info", {})
         install = data.get("installation", {})
         execution = data.get("execution", {})
         settings = data.get("settings", {})
         return cls(
             name=info.get("name", data.get("name", "unknown")),
-            open_cmd=execution.get("open_command"),
-            close_cmd=execution.get("close_command"),
+            open_cmd=resolve_os_command(execution.get("open_command"), os_name),
+            close_cmd=resolve_os_command(execution.get("close_command"), os_name),
             startup_delay=float(execution.get("startup_delay", 0.0)),
-            check_command=install.get("check_command"),
-            install_commands=list(install.get("install_commands", [])),
+            check_command=resolve_os_command(install.get("check_command"), os_name),
+            install_commands=resolve_os_commands(install.get("install_commands"), os_name),
             dependencies=list(install.get("dependencies", [])),
-            post_install_commands=list(install.get("post_install_commands", [])),
+            post_install_commands=resolve_os_commands(
+                install.get("post_install_commands"), os_name
+            ),
             activities=[Activity.from_dict(a) for a in data.get("activities", [])],
             usage_probability=float(settings.get("usage_probability", 1.0)),
         )

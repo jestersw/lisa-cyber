@@ -8,6 +8,8 @@ from lisa_agent.activity import (
     CommandResult,
     pick_next_app,
     pick_weighted_activity,
+    resolve_os_command,
+    resolve_os_commands,
     run_command,
     should_switch,
 )
@@ -315,3 +317,58 @@ def test_pick_next_app_no_current_falls_back_to_uniform():
     for _ in range(50):
         seen.add(pick_next_app(apps, None, rng, transition_model=model).name)
     assert seen == {"a", "b"}
+
+
+# ---------- per-OS command resolution (#197) ----------
+
+_CROSS_OS_PLUGIN = {
+    "app_info": {"name": "discord"},
+    "installation": {
+        "check_command": {"linux": "discord --version", "macos": "ls /Applications/Discord.app"},
+        "install_commands": {
+            "linux": ["apt install -y discord"],
+            "macos": ["brew install --cask discord"],
+        },
+    },
+    "execution": {
+        "open_command": {"linux": "discord", "macos": "open -a Discord"},
+        "close_command": {
+            "linux": "pkill -f discord",
+            "macos": "osascript -e 'quit app \"Discord\"'",
+        },
+    },
+}
+
+
+def test_resolve_os_command_string_is_shared():
+    assert resolve_os_command("discord", "macos") == "discord"
+
+
+def test_resolve_os_command_picks_os_then_default_then_none():
+    val = {"linux": "a", "default": "d"}
+    assert resolve_os_command(val, "linux") == "a"
+    assert resolve_os_command(val, "macos") == "d"  # falls back to default
+    assert resolve_os_command({"linux": "a"}, "macos") is None
+    assert resolve_os_command(None, "linux") is None
+
+
+def test_resolve_os_commands_list_and_mapping():
+    assert resolve_os_commands(["a", "b"], "macos") == ["a", "b"]
+    assert resolve_os_commands({"linux": ["x"], "macos": ["y"]}, "macos") == ["y"]
+    assert resolve_os_commands({"linux": ["x"]}, "macos") == []
+    assert resolve_os_commands(None, "linux") == []
+
+
+def test_application_resolves_macos_commands():
+    app = Application.from_dict(_CROSS_OS_PLUGIN, os_name="macos")
+    assert app.open_cmd == "open -a Discord"
+    assert app.close_cmd == "osascript -e 'quit app \"Discord\"'"
+    assert app.check_command == "ls /Applications/Discord.app"
+    assert app.install_commands == ["brew install --cask discord"]
+
+
+def test_application_resolves_linux_commands():
+    app = Application.from_dict(_CROSS_OS_PLUGIN, os_name="linux")
+    assert app.open_cmd == "discord"
+    assert app.close_cmd == "pkill -f discord"
+    assert app.install_commands == ["apt install -y discord"]
