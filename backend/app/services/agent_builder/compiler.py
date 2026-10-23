@@ -19,12 +19,28 @@ justify the complexity yet.
 from __future__ import annotations
 
 import logging
+import platform
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger("lisa.builder.compiler")
+
+
+def builder_os() -> str:
+    """The OS this builder host can produce binaries for.
+
+    Nuitka compiles for the host it runs on and cannot cross-compile, so the
+    builder can only target its own platform. Matches the agent's own
+    platform_ops mapping (Darwin -> macos, Linux -> linux)."""
+    system = platform.system()
+    if system == "Darwin":
+        return "macos"
+    if system == "Linux":
+        return "linux"
+    return system.lower()
+
 
 # Give the compiler a generous but finite budget. Nuitka builds a small agent
 # in well under a minute; anything approaching this cap is almost certainly

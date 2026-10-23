@@ -67,11 +67,12 @@ def test_enqueue_rejects_blank_agent_id():
 
 
 class FakeAgent:
-    def __init__(self, agent_id: str, config: dict | None = None):
+    def __init__(self, agent_id: str, config: dict | None = None, os_type: str = "linux"):
         self.agent_id = agent_id
         self.name = "Test Agent"
         self.status = "configured"
         self.config = config
+        self.os_type = os_type
         self.agent_token = None
         self.binary_url = None
         self.installer_url = None
@@ -133,6 +134,27 @@ def test_process_success_sets_status_ready_and_binary_url(tmp_path):
     assert call_kwargs["agent_id"] == "USR001"
     assert call_kwargs["agent_token"] == agent.agent_token
     assert call_kwargs["backend_url"] == "http://b:8000"
+    assert call_kwargs["target_os"] == "linux"
+
+
+def test_process_passes_agent_os_type_to_builder(tmp_path):
+    # The worker must build for the agent's declared OS, not a fixed default (#196).
+    agent = FakeAgent("MAC001", config={"agent_info": {"role": "dev"}}, os_type="macos")
+    config = WorkerConfig(agent_source_root=tmp_path, backend_url="http://b:8000")
+
+    fake_result = MagicMock(success=True, download_url="/api/builds/MAC001/agent_MAC001")
+    with _patched(agent) as (session_factory, _):
+        with patch(
+            "app.services.agent_builder.worker.build_agent",
+            return_value=fake_result,
+        ) as mock_build:
+            process_one_job(
+                json.dumps({"agent_id": "MAC001"}),
+                config,
+                session_factory=session_factory,
+            )
+
+    assert mock_build.call_args.kwargs["target_os"] == "macos"
 
 
 def test_process_marks_agent_building_before_calling_builder(tmp_path):

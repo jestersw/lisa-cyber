@@ -434,3 +434,59 @@ def test_installer_can_be_run_end_to_end(tmp_path):
             break
         time.sleep(0.1)
     assert marker.exists()
+
+
+# ---------- os_type targeting (#196) ----------
+
+
+def test_target_os_mismatch_raises_build_error(tmp_path):
+    src = _make_agent_source(tmp_path)
+    with patch("app.services.agent_builder.builder.compiler.builder_os", return_value="linux"):
+        with pytest.raises(BuildError, match="cannot build a macos agent on a linux builder"):
+            build_agent(
+                agent_id="USR001",
+                deployment_package=_sample_package(),
+                agent_token="tok",
+                backend_url="http://backend:8000",
+                agent_source_root=src,
+                target_os="macos",
+                workspace_root=tmp_path / "ws",
+                storage_root=tmp_path / "stg",
+            )
+
+
+def test_unknown_target_os_raises_build_error(tmp_path):
+    src = _make_agent_source(tmp_path)
+    with pytest.raises(BuildError, match="unknown target OS"):
+        build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://backend:8000",
+            agent_source_root=src,
+            target_os="plan9",
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+
+def test_matching_target_os_builds(tmp_path):
+    src = _make_agent_source(tmp_path)
+    with (
+        patch("app.services.agent_builder.builder.compiler.builder_os", return_value="linux"),
+        patch(
+            "app.services.agent_builder.builder.compiler.compile_agent",
+            side_effect=_fake_compile_success,
+        ),
+    ):
+        result = build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://backend:8000",
+            agent_source_root=src,
+            target_os="linux",
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+    assert result.success is True
