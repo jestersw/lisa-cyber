@@ -135,6 +135,38 @@ If the installer exits non-zero, no agent is running and nothing has
 been placed. Rerun the installer once the underlying issue is fixed
 (usually a broken binary or missing shared library on the VM).
 
+### macOS
+
+A macOS installer (built for `os_type=macos`) installs the agent **per-user**
+and registers it with `launchd` so it starts at login and is restarted on
+crash. After it runs, the user has:
+
+- `~/Library/Application Support/lisa/agent_<id>` — the agent binary.
+- `~/Library/LaunchAgents/com.lisa.agent.<id>.plist` — the LaunchAgent
+  (`RunAtLoad` + `KeepAlive`), loaded via `launchctl`.
+- `~/Library/Application Support/lisa/uninstall_<id>.sh` — the uninstaller.
+
+macOS surfaces this in **System Settings → General → Login Items & Extensions**
+as a background item ("… can run in the background").
+
+**Removing a macOS agent.** `KeepAlive` means `launchd` relaunches the agent if
+you just `kill` the process — you must unload the LaunchAgent. Use the
+uninstaller the installer dropped:
+
+```sh
+"$HOME/Library/Application Support/lisa/uninstall_<id>.sh"
+```
+
+or do it by hand:
+
+```sh
+launchctl unload "$HOME/Library/LaunchAgents/com.lisa.agent.<id>.plist"
+rm -f "$HOME/Library/LaunchAgents/com.lisa.agent.<id>.plist" \
+      "$HOME/Library/Application Support/lisa/agent_<id>"
+```
+
+Verify it's gone with `launchctl list | grep lisa` (should print nothing).
+
 ---
 
 ## Troubleshooting

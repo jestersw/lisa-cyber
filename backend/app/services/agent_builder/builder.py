@@ -178,7 +178,12 @@ def build_agent(
         #    (cloud-init, golden template, hand-run) picks whichever it
         #    needs by URL.
         installer_path = ws.output_dir / f"installer_{agent_id}.sh"
-        installer_mod.wrap_as_installer(result.binary_path, installer_path, agent_id=agent_id)
+        installer_mod.wrap_as_installer(
+            result.binary_path,
+            installer_path,
+            agent_id=agent_id,
+            target_os=target_os or compiler.builder_os(),
+        )
         installer_url = storage.store_installer(
             agent_id=agent_id, installer=installer_path, root=storage_root
         )

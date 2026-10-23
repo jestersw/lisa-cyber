@@ -7,6 +7,7 @@ import pytest
 from app.services.agent_builder.installer import (
     InstallerArtefact,
     InstallerError,
+    _macos_header,
     wrap_as_installer,
 )
 
@@ -178,3 +179,54 @@ def test_installer_fails_when_agent_dies_immediately(tmp_path):
     result = subprocess.run([str(installer)], capture_output=True, timeout=10, check=False)
     assert result.returncode != 0
     assert b"agent process died" in result.stderr
+
+
+# ---------- macOS LaunchAgent installer (#198) ----------
+
+
+def _macos_installer(tmp_path):
+    binary = _fake_binary(tmp_path)
+    out = tmp_path / "installer.sh"
+    wrap_as_installer(binary, out, agent_id="USR001", target_os="macos")
+    return out
+
+
+def test_macos_installer_is_self_extracting_sh(tmp_path):
+    out = _macos_installer(tmp_path)
+    contents = out.read_bytes()
+    assert contents.startswith(b"#!/bin/sh")
+    assert b"\x7fELF fake agent binary" in contents  # payload preserved
+
+
+def test_macos_installer_registers_launchagent(tmp_path):
+    out = _macos_installer(tmp_path)
+    text = out.read_text(errors="ignore")
+    assert "com.lisa.agent.USR001" in text
+    assert "Library/LaunchAgents" in text
+    assert '"$agents_dir/$label.plist"' in text
+    assert "<key>RunAtLoad</key><true/>" in text
+    assert "<key>KeepAlive</key><true/>" in text
+    assert "launchctl load" in text
+    assert "Library/Application Support/lisa" in text
+
+
+def test_macos_installer_includes_uninstaller(tmp_path):
+    out = _macos_installer(tmp_path)
+    text = out.read_text(errors="ignore")
+    assert "uninstall_USR001.sh" in text
+    assert "launchctl unload" in text
+
+
+def test_macos_header_is_valid_sh_syntax():
+    # Syntax-check the header alone (the full installer has a binary payload
+    # appended, which is not script). No execution — launchctl must not run.
+    header = _macos_header(agent_id="USR001")
+    result = subprocess.run(["sh", "-n"], input=header, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_unknown_target_os_raises(tmp_path):
+    binary = _fake_binary(tmp_path)
+    out = tmp_path / "installer.sh"
+    with pytest.raises(InstallerError, match="no installer template"):
+        wrap_as_installer(binary, out, agent_id="USR001", target_os="plan9")
