@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -75,7 +74,7 @@ def get_agent_heartbeats(agent_id: str, limit: int = 10, db: Session = Depends(g
     hbs = (
         db.query(AgentActivity)
         .filter(AgentActivity.agent_id == agent.id, AgentActivity.activity_type == "heartbeat")
-        .order_by(desc(AgentActivity.timestamp))
+        .order_by(AgentActivity.timestamp.desc())
         .limit(limit)
         .all()
     )

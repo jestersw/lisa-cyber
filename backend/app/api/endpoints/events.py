@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -46,7 +45,7 @@ def list_agent_events(agent_id: str, limit: int = 100, db: Session = Depends(get
     return (
         db.query(ActivityEvent)
         .filter(ActivityEvent.agent_id == agent.id)
-        .order_by(desc(ActivityEvent.timestamp))
+        .order_by(ActivityEvent.timestamp.desc())
         .limit(limit)
         .all()
     )
@@ -61,7 +60,7 @@ def export_events(
     query = db.query(ActivityEvent)
     if since is not None:
         query = query.filter(ActivityEvent.timestamp >= since)
-    rows = query.order_by(asc(ActivityEvent.timestamp)).limit(limit).all()
+    rows = query.order_by(ActivityEvent.timestamp.asc()).limit(limit).all()
     return {
         "count": len(rows),
         "events": [
