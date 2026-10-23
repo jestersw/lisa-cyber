@@ -265,3 +265,39 @@ def test_prefers_nuitka3_over_nuitka(tmp_path):
         compile_agent(src, out, "agent_x")
 
     assert captured["cmd"][0] == "/usr/bin/nuitka3"
+
+
+# ---------- macOS ccache workaround (#195) ----------
+
+
+def _capture_cmd(tmp_path, builder_os_value):
+    """Run compile_agent with a stubbed builder_os + subprocess, return the argv."""
+    src = _make_source_tree(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        (out / "agent_x").write_bytes(b"\x7fELF...")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    with (
+        patch("app.services.agent_builder.compiler.shutil.which", return_value="/usr/bin/nuitka"),
+        patch("app.services.agent_builder.compiler.builder_os", return_value=builder_os_value),
+        patch("app.services.agent_builder.compiler.subprocess.run", side_effect=fake_run),
+    ):
+        compile_agent(src, out, "agent_x")
+    return seen["cmd"]
+
+
+def test_macos_build_disables_downloaded_ccache(tmp_path):
+    cmd = _capture_cmd(tmp_path, "macos")
+    assert "--disable-ccache" in cmd
+    # the entry (--main=...) must stay last so the flag didn't displace it
+    assert cmd[-1].startswith("--main=")
+
+
+def test_linux_build_keeps_ccache(tmp_path):
+    cmd = _capture_cmd(tmp_path, "linux")
+    assert "--disable-ccache" not in cmd
