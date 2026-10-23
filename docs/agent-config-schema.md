@@ -144,6 +144,12 @@ per application.
 `weight` biases random activity selection; `min/max_duration` bound how long an
 activity runs.
 
+Command specs are OS-neutral: the agent translates them for the host at run
+time — `xdotool` on Linux, `osascript` (System Events) on macOS. Use xdotool-style
+key names (`ctrl+s`, `Return`, `Tab`, `Escape`, arrows); on macOS, modifiers map
+to AppleScript (`ctrl`/`cmd`/`alt`/`shift`) and unmapped non-printable keys are
+skipped rather than guessed.
+
 ### Per-OS commands
 
 Any command field in `installation` and `execution` (`open_command`,

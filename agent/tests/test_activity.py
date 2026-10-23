@@ -84,25 +84,73 @@ def test_activity_parses_fields():
 
 
 def test_command_key():
-    assert Command("key", key="Return").to_shell() == "xdotool key Return"
+    assert Command("key", key="Return").to_shell("linux") == "xdotool key Return"
 
 
 def test_command_key_combination():
-    assert Command("key_combination", keys="ctrl+s").to_shell() == "xdotool key ctrl+s"
+    assert Command("key_combination", keys="ctrl+s").to_shell("linux") == "xdotool key ctrl+s"
 
 
 def test_command_type_text():
-    assert Command("type_text", text="hi").to_shell() == "xdotool type --clearmodifiers 'hi'"
+    assert Command("type_text", text="hi").to_shell("linux") == "xdotool type --clearmodifiers 'hi'"
 
 
 def test_command_type_text_escapes_quotes():
-    out = Command("type_text", text="it's").to_shell()
+    out = Command("type_text", text="it's").to_shell("linux")
     # single quote is escaped so the shell string stays valid
     assert out == "xdotool type --clearmodifiers 'it'\\''s'"
 
 
 def test_command_unknown_type_returns_none():
-    assert Command("mystery").to_shell() is None
+    assert Command("mystery").to_shell("linux") is None
+
+
+# ---------- macOS keystroke injection (#205) ----------
+
+
+def test_macos_type_text_uses_osascript_keystroke():
+    out = Command("type_text", text="hi").to_shell("macos")
+    assert out == 'osascript -e \'tell application "System Events" to keystroke "hi"\''
+
+
+def test_macos_type_text_escapes_quotes_and_backslashes():
+    # A single quote in the text must keep the shell arg valid.
+    out = Command("type_text", text="it's").to_shell("macos")
+    assert out == ("osascript -e 'tell application \"System Events\" to keystroke \"it'\\''s\"'")
+    # Double quotes/backslashes are escaped for AppleScript.
+    out2 = Command("type_text", text='say "hi"').to_shell("macos")
+    assert 'keystroke \\"say \\\\\\"hi\\\\\\"\\"' not in out2  # sanity: not double-mangled
+    assert "keystroke" in out2
+
+
+def test_macos_key_combination_maps_modifiers():
+    out = Command("key_combination", keys="ctrl+s").to_shell("macos")
+    assert out == (
+        'osascript -e \'tell application "System Events" to keystroke "s" using {control down}\''
+    )
+
+
+def test_macos_key_combination_multiple_modifiers():
+    out = Command("key_combination", keys="cmd+shift+t").to_shell("macos")
+    assert 'keystroke "t" using {command down, shift down}' in out
+
+
+def test_macos_special_key_uses_key_code():
+    out = Command("key", key="Return").to_shell("macos")
+    assert out == "osascript -e 'tell application \"System Events\" to key code 36'"
+
+
+def test_macos_special_key_with_modifier():
+    out = Command("key_combination", keys="cmd+Tab").to_shell("macos")
+    assert out == (
+        "osascript -e 'tell application \"System Events\" to key code 48 using {command down}'"
+    )
+
+
+def test_macos_unknown_modifier_or_key_returns_none():
+    assert Command("key_combination", keys="hyper+k").to_shell("macos") is None  # unknown modifier
+    assert Command("key", key="F13").to_shell("macos") is None  # unmapped non-printable
+    assert Command("mystery").to_shell("macos") is None
 
 
 # ---------- weighted selection ----------
@@ -161,7 +209,8 @@ def test_close_app_runs_close():
     assert fake.commands == ["pkill -f editor"]
 
 
-def test_perform_activity_translates_commands_to_shell():
+def test_perform_activity_translates_commands_to_shell(monkeypatch):
+    monkeypatch.setattr("lisa_agent.activity.current_os", lambda: "linux")
     engine, fake = make_engine(seed=1)
     app = Application.from_dict(PLUGIN)
     assert engine.perform_activity(app) is True
@@ -170,7 +219,8 @@ def test_perform_activity_translates_commands_to_shell():
     assert all(c.startswith("xdotool ") for c in fake.commands)
 
 
-def test_perform_activity_skips_unknown_command_type():
+def test_perform_activity_skips_unknown_command_type(monkeypatch):
+    monkeypatch.setattr("lisa_agent.activity.current_os", lambda: "linux")
     app = Application(
         name="x",
         activities=[
