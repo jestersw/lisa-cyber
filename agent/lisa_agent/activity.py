@@ -107,6 +107,73 @@ def run_command(command: str, timeout: float = 60.0) -> CommandResult:
         return CommandResult(command, False, duration, stderr=str(exc))
 
 
+def _sh_squote(s: str) -> str:
+    """Wrap a string as a single shell argument, safe for any content."""
+    return "'" + s.replace("'", "'\\''") + "'"
+
+
+def _osascript(action: str) -> str:
+    """A shell command that runs one System Events action via osascript."""
+    return "osascript -e " + _sh_squote(f'tell application "System Events" to {action}')
+
+
+# xdotool key names -> AppleScript `key code` for non-printable keys. Printable
+# single characters are sent with `keystroke` instead.
+_MAC_KEY_CODES = {
+    "return": 36,
+    "enter": 36,
+    "tab": 48,
+    "space": 49,
+    "escape": 53,
+    "esc": 53,
+    "delete": 51,
+    "backspace": 51,
+    "up": 126,
+    "down": 125,
+    "left": 123,
+    "right": 124,
+}
+
+# xdotool modifier names -> AppleScript `using` clause tokens.
+_MAC_MODIFIERS = {
+    "ctrl": "control down",
+    "control": "control down",
+    "cmd": "command down",
+    "command": "command down",
+    "super": "command down",
+    "alt": "option down",
+    "option": "option down",
+    "shift": "shift down",
+}
+
+
+def _applescript_key(spec: str | None) -> str | None:
+    """Convert an xdotool-style key spec (e.g. "ctrl+k", "Return") into an
+    AppleScript System Events action. Returns None for anything we can't map
+    cleanly, so the caller skips it rather than emit broken AppleScript."""
+    if not spec:
+        return None
+    *mods, key = spec.split("+")
+    modifiers = []
+    for m in mods:
+        token = _MAC_MODIFIERS.get(m.lower())
+        if token is None:
+            return None  # unknown modifier - skip rather than guess
+        modifiers.append(token)
+
+    low = key.lower()
+    if low in _MAC_KEY_CODES:
+        action = f"key code {_MAC_KEY_CODES[low]}"
+    elif len(key) == 1:
+        action = f'keystroke "{key}"'
+    else:
+        return None  # unknown non-printable key name
+
+    if modifiers:
+        action += " using {" + ", ".join(modifiers) + "}"
+    return action
+
+
 @dataclass
 class Command:
     """A single structured command inside an activity."""
@@ -128,11 +195,19 @@ class Command:
             text=data.get("text"),
         )
 
-    def to_shell(self) -> str | None:
-        """Translate this command to a shell string (xdotool on Linux).
+    def to_shell(self, os_name: str | None = None) -> str | None:
+        """Translate this command to a shell string for the agent's OS.
 
-        Returns None for an unknown/unsupported type (caller skips it).
+        Linux uses xdotool; macOS uses osascript (System Events), since
+        xdotool doesn't exist there (#205). Returns None for an unknown or
+        unmappable command so the caller skips it.
         """
+        os_name = os_name or current_os()
+        if os_name == "macos":
+            return self._to_macos()
+        return self._to_xdotool()
+
+    def _to_xdotool(self) -> str | None:
         if self.type == "key" and self.key:
             return f"xdotool key {self.key}"
         if self.type == "key_combination" and self.keys:
@@ -141,6 +216,16 @@ class Command:
             # --clearmodifiers so held keys don't corrupt the typed text
             escaped = self.text.replace("'", "'\\''")
             return f"xdotool type --clearmodifiers '{escaped}'"
+        return None
+
+    def _to_macos(self) -> str | None:
+        if self.type == "type_text" and self.text is not None:
+            esc = self.text.replace("\\", "\\\\").replace('"', '\\"')
+            return _osascript(f'keystroke "{esc}"')
+        if self.type in ("key", "key_combination"):
+            spec = self.key if self.type == "key" else self.keys
+            action = _applescript_key(spec)
+            return _osascript(action) if action else None
         return None
 
 
