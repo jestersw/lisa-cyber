@@ -100,3 +100,22 @@ def test_windows_agent_still_gets_its_package(client, monkeypatch):
     agent_id = _generate(client, os_type="windows").json()["agent_id"]
     pkg = client.get(f"/api/agents/{agent_id}/config").json()
     assert pkg["agent_config"]["agent_info"]["os_type"] == "windows"
+
+
+def test_macos_agent_is_queued_when_a_macos_worker_is_declared(client, monkeypatch):
+    # Operator has a macOS build worker, so macos is in buildable_os (#195).
+    from app.config import get_settings
+
+    monkeypatch.setenv("BUILDABLE_OS", '["linux", "macos"]')
+    get_settings.cache_clear()
+    try:
+        fake = FakeRedis()
+        monkeypatch.setattr(agents_module, "get_redis", lambda: fake)
+
+        body = _generate(client, os_type="macos").json()
+        assert body["config"]["build_status"] == "queued"
+        assert len(fake.pushed) == 1
+        assert fake.pushed[0][0] == "lisa:builder:jobs:macos"  # routed to the macOS queue
+        assert body["agent_id"] in fake.pushed[0][1]
+    finally:
+        get_settings.cache_clear()

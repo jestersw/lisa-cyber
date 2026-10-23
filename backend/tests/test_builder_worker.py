@@ -6,11 +6,11 @@ import pytest
 
 from app.services.agent_builder.builder import BuildError
 from app.services.agent_builder.worker import (
-    QUEUE_KEY,
     WorkerConfig,
     WorkerConfigError,
     enqueue_build,
     process_one_job,
+    queue_key,
     run,
 )
 
@@ -42,20 +42,25 @@ def test_from_env_raises_without_backend_url(monkeypatch, tmp_path):
 # ============= enqueue_build =============
 
 
-def test_enqueue_pushes_json_job_to_queue():
+def test_enqueue_pushes_json_job_to_os_queue():
     redis_client = MagicMock()
-    enqueue_build(redis_client, "USR001")
+    enqueue_build(redis_client, "USR001", "macos")
 
     redis_client.lpush.assert_called_once()
     args = redis_client.lpush.call_args.args
-    assert args[0] == QUEUE_KEY
+    assert args[0] == queue_key("macos") == "lisa:builder:jobs:macos"
     job = json.loads(args[1])
     assert job == {"agent_id": "USR001"}
 
 
 def test_enqueue_rejects_blank_agent_id():
     with pytest.raises(ValueError, match="agent_id"):
-        enqueue_build(MagicMock(), "")
+        enqueue_build(MagicMock(), "", "linux")
+
+
+def test_enqueue_rejects_blank_target_os():
+    with pytest.raises(ValueError, match="target_os"):
+        enqueue_build(MagicMock(), "USR001", "")
 
 
 # ============= process_one_job =============

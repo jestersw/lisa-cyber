@@ -113,6 +113,12 @@ def compile_agent(
         f"--main={entry}",
     ]
 
+    # On Apple Silicon, the ccache binary Nuitka auto-downloads is x86_64 and
+    # breaks the build (it drags in an x86_64 `xcrun`, which can't load the
+    # arm64-only libxcrun). Use the native toolchain directly instead.
+    if builder_os() == "macos":
+        cmd.insert(-1, "--disable-ccache")
+
     log.info("running: %s", " ".join(cmd))
     try:
         completed = subprocess.run(
