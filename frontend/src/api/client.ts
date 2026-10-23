@@ -1,9 +1,36 @@
 export const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-let authToken: string | null = null;
+const TOKEN_KEY = "lisa_operator_token";
+
+function readStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken: string | null = readStoredToken();
 
 export function setToken(token: string | null): void {
   authToken = token;
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // Private mode / disabled storage: keep the in-memory token and carry on.
+  }
+}
+
+export function getToken(): string | null {
+  return authToken;
+}
+
+export function isAuthenticated(): boolean {
+  return authToken !== null;
 }
 
 export class ApiError extends Error {
@@ -26,6 +53,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (response.status === 401) {
     setToken(null);
+    // Let the app route back to the login screen (listener in App).
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("lisa:auth-expired"));
+    }
     throw new ApiError(401, "Unauthorized");
   }
   if (!response.ok) {
@@ -46,6 +77,12 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+}
 
 export interface Role {
   id: number;
@@ -141,6 +178,12 @@ export interface NextActivity {
 }
 
 export const endpoints = {
+  login: async (password: string): Promise<TokenResponse> => {
+    const token = await api.post<TokenResponse>("/api/auth/login", { password });
+    setToken(token.access_token);
+    return token;
+  },
+  logout: (): void => setToken(null),
   roles: () => api.get<Role[]>("/api/roles"),
   behaviorTemplates: () => api.get<BehaviorTemplate[]>("/api/behavior-templates"),
   applicationTemplates: () => api.get<ApplicationTemplate[]>("/api/application-templates"),

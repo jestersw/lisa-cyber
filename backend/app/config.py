@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     agent_token: str | None = None
     public_base_url: str = "http://localhost:8000"
 
+    # Operator (panel) auth. When operator_password is unset the operator
+    # endpoints are open — dev mode, matching agent_token above. jwt_secret
+    # signs the login tokens; when unset it is derived from operator_password
+    # so a single env var (OPERATOR_PASSWORD) is enough to lock the panel.
+    operator_password: str | None = None
+    jwt_secret: str | None = None
+    jwt_ttl_minutes: int = 720
+
     ml_models_dir: str = "models"
     default_activity: str = "firefox"
 

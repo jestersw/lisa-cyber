@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { endpoints } from "../api/client";
 
 const links = [
   { to: "/dashboard", label: "Dashboard" },
@@ -7,6 +8,13 @@ const links = [
 ];
 
 export function Layout() {
+  const navigate = useNavigate();
+
+  function logout() {
+    endpoints.logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="app-shell">
       <nav className="nav">
@@ -25,6 +33,9 @@ export function Layout() {
               {link.label}
             </NavLink>
           ))}
+          <button type="button" className="logout" onClick={logout}>
+            Sign out
+          </button>
         </div>
       </nav>
       <Outlet />

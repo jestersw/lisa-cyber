@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.models import Agent
 from app.models_store import get_store, restrict_model
-from app.security import require_agent_token
+from app.security import require_agent_token, require_operator
 
 router = APIRouter()
 
@@ -70,7 +70,7 @@ def next_activity(
     }
 
 
-@router.get("/ml/status")
+@router.get("/ml/status", dependencies=[Depends(require_operator)])
 def ml_status():
     store = get_store()
     shared = store.get("_shared")
@@ -81,7 +81,7 @@ def ml_status():
     }
 
 
-@router.post("/ml/reload")
+@router.post("/ml/reload", dependencies=[Depends(require_operator)])
 def ml_reload():
     store = get_store()
     store.clear()

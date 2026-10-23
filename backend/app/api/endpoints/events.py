@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.models import ActivityEvent, Agent
 from app.ratelimit import rate_limit
 from app.schemas import ActivityEventBatch, ActivityEventResponse
-from app.security import require_agent_token
+from app.security import require_agent_token, require_operator
 
 router = APIRouter()
 
@@ -37,7 +37,11 @@ def ingest_events(agent_id: str, batch: ActivityEventBatch, db: Session = Depend
     return {"agent_id": agent_id, "ingested": len(batch.events)}
 
 
-@router.get("/agents/{agent_id}/events", response_model=list[ActivityEventResponse])
+@router.get(
+    "/agents/{agent_id}/events",
+    response_model=list[ActivityEventResponse],
+    dependencies=[Depends(require_operator)],
+)
 def list_agent_events(agent_id: str, limit: int = 100, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
@@ -51,7 +55,7 @@ def list_agent_events(agent_id: str, limit: int = 100, db: Session = Depends(get
     )
 
 
-@router.get("/events/export")
+@router.get("/events/export", dependencies=[Depends(require_operator)])
 def export_events(
     since: datetime | None = None,
     limit: int = Query(default=10000, le=100000),

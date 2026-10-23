@@ -484,3 +484,89 @@
   text-align: right;
   color: var(--light);
 }
+
+/* Operator login + sign-out */
+.nav-links .logout {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--light);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nav-links .logout:hover {
+  color: var(--white);
+  box-shadow: var(--accent-glow);
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--page-pad);
+  background: var(--bg);
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: min(360px, 100%);
+  padding: 40px 32px;
+  background: var(--deep);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--accent-glow);
+}
+
+.login-card h1 {
+  margin: 0;
+  color: var(--white);
+  font-size: 1.3rem;
+}
+
+.login-card label {
+  color: var(--light);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.login-card input {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--mid);
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-mono);
+}
+
+.login-card input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.login-card button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--white);
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.login-card button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-error {
+  margin: 0;
+  color: #ff6b6b;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
