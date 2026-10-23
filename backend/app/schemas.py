@@ -327,3 +327,13 @@ class PluginGenerationResponse(BaseModel):
     os_type: OSType
     template_config: dict
     source: str
+
+
+class LoginRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int  # seconds

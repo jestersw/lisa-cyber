@@ -23,7 +23,7 @@ from app.schemas import (
     AgentResponse,
     DeploymentPackage,
 )
-from app.security import require_agent_token
+from app.security import require_agent_token, require_operator
 from app.services.agent_builder.worker import enqueue_build
 
 log = logging.getLogger("lisa.agents")
@@ -54,7 +54,11 @@ def _queue_build(db: Session, agent: Agent) -> str:
     return "queued"
 
 
-@router.post("/agents/generate", response_model=AgentGenerateResponse)
+@router.post(
+    "/agents/generate",
+    response_model=AgentGenerateResponse,
+    dependencies=[Depends(require_operator)],
+)
 def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
     role = None
     if config.role_id is not None:
@@ -127,7 +131,7 @@ def generate_agent(config: AgentConfig, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/agents", response_model=list[AgentResponse])
+@router.get("/agents", response_model=list[AgentResponse], dependencies=[Depends(require_operator)])
 def list_agents(
     status: str | None = None,
     os_type: str | None = None,
@@ -146,7 +150,7 @@ def list_agents(
     return query.order_by(Agent.created_at.desc()).offset(skip).limit(limit).all()
 
 
-@router.get("/agents/{agent_id}/status")
+@router.get("/agents/{agent_id}/status", dependencies=[Depends(require_operator)])
 def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:

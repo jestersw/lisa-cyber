@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.models import Agent, AgentActivity
 from app.ratelimit import rate_limit
 from app.schemas import AgentHeartbeatRequest, AgentHeartbeatResponse
-from app.security import require_agent_token
+from app.security import require_agent_token, require_operator
 
 router = APIRouter()
 
@@ -66,7 +66,7 @@ def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/agents/{agent_id}/heartbeats")
+@router.get("/agents/{agent_id}/heartbeats", dependencies=[Depends(require_operator)])
 def get_agent_heartbeats(agent_id: str, limit: int = 10, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
@@ -86,7 +86,7 @@ def get_agent_heartbeats(agent_id: str, limit: int = 10, db: Session = Depends(g
     }
 
 
-@router.get("/agents-active")
+@router.get("/agents-active", dependencies=[Depends(require_operator)])
 def get_active_agents(threshold_minutes: int = 30, db: Session = Depends(get_db)):
     cutoff = _utcnow() - timedelta(minutes=threshold_minutes)
     agents = db.query(Agent).filter(Agent.last_seen >= cutoff, Agent.status == "active").all()

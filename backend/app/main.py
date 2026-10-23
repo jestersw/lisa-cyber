@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.endpoints import (
     agents,
     applications,
+    auth,
     builds,
     events,
     generate,
@@ -17,6 +18,7 @@ from app.api.endpoints import (
 )
 from app.config import get_settings
 from app.database import get_engine
+from app.security import require_operator
 
 
 @asynccontextmanager
@@ -39,13 +41,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(roles.router, prefix="/api", tags=["Roles"])
-app.include_router(templates.router, prefix="/api", tags=["Behavior templates"])
-app.include_router(applications.router, prefix="/api", tags=["Application templates"])
+# Operator login is public (it is how you get a token).
+app.include_router(auth.router, prefix="/api")
+
+# Pure operator-facing routers: every route needs an operator token.
+_operator = [Depends(require_operator)]
+app.include_router(roles.router, prefix="/api", tags=["Roles"], dependencies=_operator)
+app.include_router(
+    templates.router, prefix="/api", tags=["Behavior templates"], dependencies=_operator
+)
+app.include_router(
+    applications.router, prefix="/api", tags=["Application templates"], dependencies=_operator
+)
+app.include_router(
+    generate.router, prefix="/api", tags=["Template generation"], dependencies=_operator
+)
+
+# Mixed routers (agent token + operator): guarded per-route inside the module.
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(heartbeat.router, prefix="/api", tags=["Heartbeat"])
 app.include_router(events.router, prefix="/api", tags=["Activity events"])
-app.include_router(generate.router, prefix="/api", tags=["Template generation"])
 app.include_router(ml.router, prefix="/api", tags=["ML inference"])
 app.include_router(builds.router, prefix="/api", tags=["Build artefacts"])
 

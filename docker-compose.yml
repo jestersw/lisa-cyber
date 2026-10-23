@@ -38,6 +38,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: '["http://localhost:5173"]'
       ML_MODELS_DIR: /models
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
     ports:
       - "8000:8000"
     volumes:
