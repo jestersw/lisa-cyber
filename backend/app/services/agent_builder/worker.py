@@ -131,6 +131,7 @@ def process_one_job(
                 agent_token=token,
                 backend_url=config.backend_url,
                 agent_source_root=config.agent_source_root,
+                target_os=agent.os_type or "linux",
             )
         except BuildError as exc:
             log.error("build %s failed to start: %s", agent_id, exc)

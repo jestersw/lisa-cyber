@@ -74,6 +74,9 @@ class BuildResult:
     installer_url: str | None = None
 
 
+SUPPORTED_TARGETS = ("linux", "macos", "windows")
+
+
 def build_agent(
     agent_id: str,
     deployment_package: dict[str, Any],
@@ -81,6 +84,7 @@ def build_agent(
     backend_url: str,
     *,
     agent_source_root: Path,
+    target_os: str | None = None,
     workspace_root: Path = workspace.DEFAULT_ROOT,
     storage_root: Path = storage.DEFAULT_STORAGE_ROOT,
 ) -> BuildResult:
@@ -106,6 +110,23 @@ def build_agent(
         raise BuildError("agent_token must be provided")
     if not backend_url:
         raise BuildError("backend_url must be provided")
+
+    # Build only for a target this host can actually produce. Nuitka cannot
+    # cross-compile, so a macOS agent needs a macOS builder (see #195). Fail
+    # fast with an actionable message instead of handing a Linux ELF to a
+    # macOS/Windows agent (#196). target_os=None means "build for the host".
+    if target_os is not None:
+        if target_os not in SUPPORTED_TARGETS:
+            raise BuildError(
+                f"unknown target OS {target_os!r} (expected one of {SUPPORTED_TARGETS})"
+            )
+        host_os = compiler.builder_os()
+        if target_os != host_os:
+            raise BuildError(
+                f"cannot build a {target_os} agent on a {host_os} builder: "
+                f"Nuitka does not cross-compile. A {target_os} build host is required "
+                "(see issue #195)."
+            )
 
     ws = workspace.create(agent_id, root=workspace_root)
     log.info("build %s: workspace=%s", agent_id, ws.root)
