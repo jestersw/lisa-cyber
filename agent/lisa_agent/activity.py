@@ -3,15 +3,28 @@
 Parses the full application-plugin format from the config spec
 (docs/agent-config-schema.md): installation, execution, and activities whose
 commands are structured objects (key / key_combination / type_text) rather than
-raw shell strings. Structured commands are translated to shell via xdotool at
-run time. Activity selection is weighted by each activity's `weight`.
+raw shell strings. Structured commands are translated to a shell command for the
+agent's OS at run time. Activity selection is weighted by each activity's
+`weight`.
 
 Originally ported from the Linux agent's open/close/simulate_activity logic;
-extended here to the plugin format.
+extended here to the plugin format and to macOS and Windows.
+
+Per-OS translation of a structured command:
+  - keystrokes: xdotool (Linux), osascript/System Events (macOS), PowerShell
+    SendKeys (Windows, #221);
+  - network + file activity: POSIX tools (curl/nslookup/nc, touch/mv/cp/rm) on
+    Linux and macOS; the PowerShell equivalents (Invoke-WebRequest /
+    Resolve-DnsName / Test-NetConnection, New-Item / Move-Item / Copy-Item /
+    Remove-Item) on Windows. Both produce the same OS-level process / file /
+    network events a SOC would see, which is the point (see the design note in
+    docs/agent-config-schema.md).
 
 Security note (AppSec): run_command uses shell=True because plugin commands rely
 on shell features. Command strings come only from trusted operator-authored (or
-generated-then-stored) plugins, never from unvalidated external input.
+generated-then-stored) plugins, never from unvalidated external input. The same
+holds for the network/file builders below: hostnames and filenames are validated
+(_SAFE_HOST / _safe_name) before they reach a shell string, on every OS.
 """
 
 from __future__ import annotations
@@ -114,10 +127,21 @@ def _sh_squote(s: str) -> str:
 
 
 # --- network + file activity (#213) ---
+#
+# These produce OS-level network/file events for monitoring, not payloads. The
+# POSIX builders below target Linux and macOS; the PowerShell builders further
+# down (#221) produce the same events on Windows. Both go through the same
+# _safe_name / _SAFE_HOST validation, so a malformed filename or host is
+# rejected before it ever reaches a shell string, on every OS.
 
 # Per-user sandbox for file activity. Embedded as a shell literal so $HOME
 # expands on the target and nothing is ever written outside this directory.
 ACTIVITY_DIR = '"$HOME/.lisa/activity"'
+
+# The same sandbox for Windows/PowerShell. $env:USERPROFILE is PowerShell's
+# $HOME equivalent; Join-Path keeps the path correct regardless of trailing
+# separators. Nothing is ever written outside this directory.
+WIN_ACTIVITY_DIR = '(Join-Path $env:USERPROFILE ".lisa\\activity")'
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 _SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+$")
@@ -177,6 +201,103 @@ def _file_delete(target: str | None) -> str | None:
     if name is None:
         return None
     return f"rm -f {_file_in_sandbox(name)}"
+
+
+# --- Windows (PowerShell) network + file builders (#221) ---
+#
+# Each returns a full `powershell ...` command, mirroring the POSIX builders
+# above one-for-one so the same activity plugin yields equivalent events on a
+# Windows VM. Inputs are already validated (_safe_name allows only
+# [A-Za-z0-9._-], _SAFE_HOST only [A-Za-z0-9.-]), so they contain no PowerShell
+# metacharacters and embed safely in a double-quoted PS string; URLs, validated
+# only by scheme, go in a single-quoted PS literal with '' escaping.
+
+
+def _ps(script: str) -> str:
+    """Wrap a PowerShell script fragment into a non-interactive invocation.
+
+    -NoProfile keeps a user's profile from changing behaviour; -Command runs
+    the fragment. The whole fragment is a single shell argument (single-quoted
+    for the outer shell) so run_command's shell=True passes it through intact.
+    """
+    return "powershell -NoProfile -Command " + _sh_squote(script)
+
+
+def _ps_squote(s: str) -> str:
+    """Quote a string as a single-quoted PowerShell literal ('' escapes ')."""
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _win_http_request(url: str | None) -> str | None:
+    if not url or not url.startswith(("http://", "https://")):
+        return None
+    # -UseBasicParsing avoids the IE engine dependency on older hosts; the
+    # output is discarded — we only want the outbound request event.
+    return _ps(
+        f"try {{ Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri {_ps_squote(url)} "
+        f"| Out-Null }} catch {{}}"
+    )
+
+
+def _win_dns_lookup(host: str | None) -> str | None:
+    if not host or not _SAFE_HOST.match(host):
+        return None
+    return _ps(f'try {{ Resolve-DnsName -Name "{host}" -ErrorAction Stop | Out-Null }} catch {{}}')
+
+
+def _win_ldap_query(host: str | None, port: int | None) -> str | None:
+    # Mirror the POSIX "open a TCP connection to the LDAP port" approach:
+    # Test-NetConnection produces the same outbound connection event without
+    # needing an LDAP client on the target.
+    if not host or not _SAFE_HOST.match(host):
+        return None
+    p = port or 389
+    if not (0 < p < 65536):
+        return None
+    return _ps(
+        f'try {{ Test-NetConnection -ComputerName "{host}" -Port {p} '
+        f"-WarningAction SilentlyContinue | Out-Null }} catch {{}}"
+    )
+
+
+def _win_file_in_sandbox(name: str) -> str:
+    """A PowerShell expression for a sandbox file path (Join-Path)."""
+    return f'(Join-Path {WIN_ACTIVITY_DIR} "{name}")'
+
+
+def _win_ensure_dir() -> str:
+    return f"New-Item -ItemType Directory -Force -Path {WIN_ACTIVITY_DIR} | Out-Null"
+
+
+def _win_file_create(target: str | None) -> str | None:
+    name = _safe_name(target)
+    if name is None:
+        return None
+    return _ps(
+        f"{_win_ensure_dir()}; "
+        f"New-Item -ItemType File -Force -Path {_win_file_in_sandbox(name)} | Out-Null"
+    )
+
+
+def _win_file_two_arg(cmdlet: str, target: str | None, dest: str | None) -> str | None:
+    src = _safe_name(target)
+    dst = _safe_name(dest)
+    if src is None or dst is None:
+        return None
+    return _ps(
+        f"{_win_ensure_dir()}; "
+        f"{cmdlet} -Force -Path {_win_file_in_sandbox(src)} "
+        f"-Destination {_win_file_in_sandbox(dst)}"
+    )
+
+
+def _win_file_delete(target: str | None) -> str | None:
+    name = _safe_name(target)
+    if name is None:
+        return None
+    return _ps(
+        f"Remove-Item -Force -ErrorAction SilentlyContinue -Path {_win_file_in_sandbox(name)}"
+    )
 
 
 def _osascript(action: str) -> str:
@@ -241,6 +362,94 @@ def _applescript_key(spec: str | None) -> str | None:
     return action
 
 
+# --- Windows keystroke injection via PowerShell SendKeys (#221) ---
+#
+# SendKeys (System.Windows.Forms) sends keystrokes to the foreground window,
+# the Windows analogue of xdotool / System Events. Special keys use a braced
+# token ({ENTER}); modifiers use prefix symbols (^ ctrl, % alt, + shift). We
+# map the agent's xdotool-style key names onto that syntax, and return None for
+# anything we can't map cleanly so the caller skips it rather than send garbage.
+
+# xdotool key names -> SendKeys special-key token (without the braces).
+_WIN_KEY_TOKENS = {
+    "return": "ENTER",
+    "enter": "ENTER",
+    "tab": "TAB",
+    "space": " ",  # a literal space is a valid SendKeys char, no braces needed
+    "escape": "ESC",
+    "esc": "ESC",
+    "delete": "DEL",
+    "backspace": "BACKSPACE",
+    "up": "UP",
+    "down": "DOWN",
+    "left": "LEFT",
+    "right": "RIGHT",
+}
+
+# xdotool modifier names -> SendKeys prefix symbol. (Windows has no Command
+# key; cmd/super map to ctrl, matching how a ctrl-based plugin would behave.)
+_WIN_MODIFIERS = {
+    "ctrl": "^",
+    "control": "^",
+    "cmd": "^",
+    "command": "^",
+    "super": "^",
+    "alt": "%",
+    "option": "%",
+    "shift": "+",
+}
+
+# Characters with special meaning to SendKeys must be wrapped in braces to be
+# sent literally.
+_SENDKEYS_SPECIAL = set("+^%~(){}[]")
+
+
+def _sendkeys_escape_char(ch: str) -> str:
+    """Escape one character for a SendKeys literal string."""
+    return "{" + ch + "}" if ch in _SENDKEYS_SPECIAL else ch
+
+
+def _sendkeys_escape_text(text: str) -> str:
+    return "".join(_sendkeys_escape_char(c) for c in text)
+
+
+def _sendkeys_spec(spec: str | None) -> str | None:
+    """Convert an xdotool-style key spec (e.g. "ctrl+k", "Return") into a
+    SendKeys string. Returns None for anything we can't map cleanly."""
+    if not spec:
+        return None
+    *mods, key = spec.split("+")
+    prefix = ""
+    for m in mods:
+        symbol = _WIN_MODIFIERS.get(m.lower())
+        if symbol is None:
+            return None  # unknown modifier - skip rather than guess
+        prefix += symbol
+
+    low = key.lower()
+    if low in _WIN_KEY_TOKENS:
+        token = _WIN_KEY_TOKENS[low]
+        body = token if token == " " else "{" + token + "}"
+    elif len(key) == 1:
+        body = _sendkeys_escape_char(key)
+    else:
+        return None  # unknown non-printable key name
+    return prefix + body
+
+
+def _powershell_sendkeys(send: str) -> str:
+    """A shell command that sends `send` via SendKeys through PowerShell.
+
+    The SendKeys payload is embedded as a single-quoted PowerShell literal so
+    its own metacharacters never reach the outer shell; the whole PS command is
+    then single-quoted for run_command's shell=True."""
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        f"[System.Windows.Forms.SendKeys]::SendWait({_ps_squote(send)})"
+    )
+    return _ps(script)
+
+
 @dataclass
 class Command:
     """A single structured command inside an activity."""
@@ -277,23 +486,29 @@ class Command:
     def to_shell(self, os_name: str | None = None) -> str | None:
         """Translate this command to a shell string for the agent's OS.
 
-        Network and file activity (#213) is POSIX-portable, so it resolves the
-        same on Linux and macOS. Keystroke activity differs: Linux uses
-        xdotool, macOS uses osascript (System Events, #205). Returns None for
-        an unknown or unmappable command so the caller skips it.
+        Network and file activity (#213) produces the same OS-level events on
+        every platform, but the command differs: POSIX tools (curl/nslookup/nc,
+        touch/mv/cp/rm) on Linux and macOS, PowerShell cmdlets on Windows
+        (#221). Keystroke activity differs too: Linux uses xdotool, macOS uses
+        osascript (System Events, #205), Windows uses PowerShell SendKeys.
+        Returns None for an unknown or unmappable command so the caller skips
+        it.
         """
-        shared = self._to_shared()
+        os_name = os_name or current_os()
+
+        shared = self._to_windows_io() if os_name == "windows" else self._to_posix_io()
         if shared is not None:
             return shared
-        os_name = os_name or current_os()
+
         if os_name == "macos":
             return self._to_macos()
+        if os_name == "windows":
+            return self._to_windows()
         return self._to_xdotool()
 
-    def _to_shared(self) -> str | None:
-        """OS-neutral activity types (network + file), using POSIX tools that
-        exist on Linux and macOS. Returns None for the keystroke types, which
-        the OS-specific methods handle."""
+    def _to_posix_io(self) -> str | None:
+        """Network + file activity as POSIX tools (Linux and macOS). Returns
+        None for the keystroke types, which the OS-specific methods handle."""
         if self.type == "http_request":
             return _http_request(self.url)
         if self.type == "dns_lookup":
@@ -308,6 +523,25 @@ class Command:
             return _file_two_arg("cp", self.target, self.dest)
         if self.type == "file_delete":
             return _file_delete(self.target)
+        return None
+
+    def _to_windows_io(self) -> str | None:
+        """Network + file activity as PowerShell cmdlets (Windows). Mirrors
+        _to_posix_io one-for-one. Returns None for the keystroke types."""
+        if self.type == "http_request":
+            return _win_http_request(self.url)
+        if self.type == "dns_lookup":
+            return _win_dns_lookup(self.host)
+        if self.type == "ldap_query":
+            return _win_ldap_query(self.host, self.port)
+        if self.type == "file_create":
+            return _win_file_create(self.target)
+        if self.type == "file_rename":
+            return _win_file_two_arg("Move-Item", self.target, self.dest)
+        if self.type == "file_copy":
+            return _win_file_two_arg("Copy-Item", self.target, self.dest)
+        if self.type == "file_delete":
+            return _win_file_delete(self.target)
         return None
 
     def _to_xdotool(self) -> str | None:
@@ -329,6 +563,15 @@ class Command:
             spec = self.key if self.type == "key" else self.keys
             action = _applescript_key(spec)
             return _osascript(action) if action else None
+        return None
+
+    def _to_windows(self) -> str | None:
+        if self.type == "type_text" and self.text is not None:
+            return _powershell_sendkeys(_sendkeys_escape_text(self.text))
+        if self.type in ("key", "key_combination"):
+            spec = self.key if self.type == "key" else self.keys
+            send = _sendkeys_spec(spec)
+            return _powershell_sendkeys(send) if send else None
         return None
 
 

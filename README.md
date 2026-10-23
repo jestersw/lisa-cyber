@@ -45,8 +45,9 @@ VM, with no standing process polling the backend.
   templates, deployment packages, and heartbeats, and enqueues builds through Redis.
 - **Build pipeline** — a worker that turns a configuration into an immutable ELF via
   nuitka and packages it as a self-contained installer.
-- **Agent** — a POSIX activity simulator that emulates a role on a schedule, runs as
-  an unprivileged local user, and reports back by heartbeat.
+- **Agent** — a cross-platform activity simulator (Linux, macOS, Windows) that
+  emulates a role on a schedule, runs as an unprivileged local user, and reports
+  back by heartbeat.
 - **Trainer** — an ML service that learns a per-role transition model the agent uses
   to choose realistic next actions; behavior templates can also be generated from a
   natural-language description via an LLM.
@@ -54,7 +55,7 @@ VM, with no standing process polling the backend.
 ## Repository layout
 backend/ FastAPI management API, build worker, ML trainer entrypoints
 frontend/ React + Vite control panel
-agent/ POSIX activity agent and self-contained installer builder
+agent/ cross-platform activity agent and self-contained installer builder
 ml/ transition-model training
 docs/ onboarding, deployment, agent config schema, design notes
 scripts/ operational scripts (backend build-to-installer smoke)

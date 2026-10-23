@@ -83,9 +83,24 @@ class Agent:
     # -- lifecycle -----------------------------------------------------
 
     def install_signal_handlers(self) -> None:
-        """Route SIGTERM/SIGINT to a graceful stop (skip in non-main threads)."""
-        signal.signal(signal.SIGTERM, lambda *_: self.stop())
-        signal.signal(signal.SIGINT, lambda *_: self.stop())
+        """Route termination signals to a graceful stop (skip in non-main threads).
+
+        The available signals differ by OS: SIGINT exists everywhere; SIGTERM
+        is POSIX (how the mutex replaces a previous copy, and how a service
+        manager stops the agent); SIGBREAK is the Windows Ctrl+Break / taskkill
+        signal. We register whichever ones the platform defines so shutdown is
+        graceful on every OS.
+        """
+        for name in ("SIGINT", "SIGTERM", "SIGBREAK"):
+            sig = getattr(signal, name, None)
+            if sig is None:
+                continue
+            try:
+                signal.signal(sig, lambda *_: self.stop())
+            except (ValueError, OSError):
+                # ValueError: not the main thread. OSError: signal unsupported
+                # on this platform despite being defined. Neither is fatal.
+                log.debug("could not install handler for %s", name)
 
     def start(self) -> None:
         if self.mutex is not None and not self.mutex.acquire():

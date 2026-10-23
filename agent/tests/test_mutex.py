@@ -3,7 +3,14 @@ import os
 import subprocess
 import sys
 
-from lisa_agent.mutex import AgentMutex, _pid_alive
+from lisa_agent import mutex as mutex_mod
+from lisa_agent.mutex import (
+    AgentMutex,
+    PosixAgentMutex,
+    WindowsAgentMutex,
+    _pid_alive,
+    make_mutex,
+)
 
 
 def make(tmp_path, identity="agent_u1"):
@@ -83,3 +90,50 @@ def test_terminates_previous_live_holder(tmp_path):
 def test_pid_alive_basic():
     assert _pid_alive(os.getpid()) is True
     assert _pid_alive(-1) is False
+
+
+# ---------- OS dispatch + Windows mutex (#221) ----------
+
+
+def test_agentmutex_alias_is_posix():
+    # The backwards-compatible name stays the POSIX implementation.
+    assert AgentMutex is PosixAgentMutex
+
+
+def test_make_mutex_picks_posix(monkeypatch, tmp_path):
+    monkeypatch.setattr(mutex_mod, "current_os", lambda: "linux")
+    m = make_mutex("agent_x", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb")
+    assert isinstance(m, PosixAgentMutex)
+
+
+def test_make_mutex_picks_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(mutex_mod, "current_os", lambda: "windows")
+    m = make_mutex("agent_x", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb")
+    assert isinstance(m, WindowsAgentMutex)
+
+
+def test_windows_mutex_sanitizes_kernel_object_name(tmp_path):
+    # Identity goes into a Global\ kernel object name; anything but [A-Za-z0-9._-]
+    # is replaced so the name stays valid, and the namespace prefix is kept.
+    m = WindowsAgentMutex(
+        "tenant/42:agent", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb"
+    )
+    assert m._mutex_name.startswith("Global\\lisa_agent_")
+    body = m._mutex_name[len("Global\\lisa_agent_") :]
+    assert "/" not in body and ":" not in body
+    assert body == "tenant_42_agent"
+
+
+def test_windows_mutex_lock_path_and_dir(tmp_path):
+    run = tmp_path / "run"
+    m = WindowsAgentMutex("agent_w1", mutex_dir=run, fallback_dir=tmp_path / "fb")
+    assert m.mutex_dir == run
+    assert m.mutex_path == run / "agent_w1.lock"
+
+
+def test_windows_mutex_falls_back_when_primary_unwritable(tmp_path):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a dir")  # mkdir/probe on this fails -> fallback
+    fallback = tmp_path / "fb"
+    m = WindowsAgentMutex("agent_w2", mutex_dir=blocker, fallback_dir=fallback)
+    assert m.mutex_dir == fallback

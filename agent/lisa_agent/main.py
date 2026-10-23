@@ -24,7 +24,7 @@ from lisa_agent.activity import ActivityEngine, Application
 from lisa_agent.config import Config, WorkSchedule
 from lisa_agent.heartbeat import HeartbeatLoop, HeartbeatSender, build_payload
 from lisa_agent.installer import ensure_all_installed
-from lisa_agent.mutex import AgentMutex
+from lisa_agent.mutex import make_mutex
 from lisa_agent.nextapp import NextAppClient
 from lisa_agent.orchestrator import Agent
 from lisa_agent.package import DeploymentPackage, PackageError
@@ -58,8 +58,9 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
     """
     identity = pkg.identity
 
-    # One-per-machine lock, keyed to this agent's identity.
-    mutex = AgentMutex(identity.agent_id)
+    # One-per-machine lock, keyed to this agent's identity. make_mutex picks
+    # the POSIX or Windows implementation for the host it's running on.
+    mutex = make_mutex(identity.agent_id)
 
     # Check every configured app; install if missing. One app's failure doesn't
     # block the others.
