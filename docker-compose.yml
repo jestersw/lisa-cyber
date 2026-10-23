@@ -41,6 +41,7 @@ services:
       OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-}
       AGENT_TOKEN: ${AGENT_TOKEN:-}
+      BUILDABLE_OS: ${BUILDABLE_OS:-["linux"]}
     ports:
       - "8000:8000"
     volumes:

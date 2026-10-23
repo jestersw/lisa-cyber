@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.defaults import build_agent_config
 from app.llm import generate_plugin
@@ -31,11 +32,8 @@ log = logging.getLogger("lisa.agents")
 router = APIRouter()
 
 
-BUILDABLE_OS = {"linux"}
-
-
 def _queue_build(db: Session, agent: Agent) -> str:
-    if agent.os_type not in BUILDABLE_OS:
+    if agent.os_type not in get_settings().buildable_os:
         log.info("builds are not available for %s yet, agent %s", agent.os_type, agent.agent_id)
         return "unsupported_os"
 
@@ -44,7 +42,7 @@ def _queue_build(db: Session, agent: Agent) -> str:
         log.warning("redis unavailable, agent %s stays configured", agent.agent_id)
         return "queue_unavailable"
     try:
-        enqueue_build(redis_client, agent.agent_id)
+        enqueue_build(redis_client, agent.agent_id, agent.os_type)
     except Exception as exc:
         log.warning("could not enqueue build for %s: %s", agent.agent_id, exc)
         return "queue_unavailable"

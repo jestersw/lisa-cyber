@@ -41,12 +41,21 @@ from sqlalchemy.orm import Session
 
 from app.database import get_sessionmaker
 from app.models.models import Agent
+from app.services.agent_builder import compiler
 from app.services.agent_builder.builder import BuildError, build_agent
 
 log = logging.getLogger("lisa.builder.worker")
 
-# Redis list that jobs live on. LPUSH from the API side, BRPOP here.
-QUEUE_KEY = "lisa:builder:jobs"
+# Redis lists that jobs live on, one per target OS: a worker only pops jobs it
+# can actually build (Nuitka can't cross-compile), so a Linux worker never
+# dequeues a macOS job and vice versa. LPUSH from the API side, BRPOP here.
+QUEUE_PREFIX = "lisa:builder:jobs"
+
+
+def queue_key(target_os: str) -> str:
+    """Redis queue for a given target OS, e.g. lisa:builder:jobs:macos."""
+    return f"{QUEUE_PREFIX}:{target_os}"
+
 
 # BRPOP timeout (seconds) - how long the worker blocks before checking the
 # stop flag. Short enough to shut down responsively, long enough not to hot-loop.
@@ -79,17 +88,20 @@ class WorkerConfig:
         )
 
 
-def enqueue_build(redis_client: Any, agent_id: str) -> None:
-    """Push a build job onto the queue. Called from the API when a new agent
-    is registered (status transitions to `building`).
+def enqueue_build(redis_client: Any, agent_id: str, target_os: str) -> None:
+    """Push a build job onto the target OS's queue. Called from the API when a
+    new agent is registered (status transitions to `building`).
 
     We only push the agent_id - everything else the worker needs (config, os)
-    it reads from the DB, so there's a single source of truth."""
+    it reads from the DB, so there's a single source of truth. The OS picks
+    the queue so the job reaches a worker that can build it."""
     if not agent_id:
         raise ValueError("agent_id must be provided")
+    if not target_os:
+        raise ValueError("target_os must be provided")
     job = json.dumps({"agent_id": agent_id})
-    redis_client.lpush(QUEUE_KEY, job)
-    log.info("enqueued build for %s", agent_id)
+    redis_client.lpush(queue_key(target_os), job)
+    log.info("enqueued build for %s on %s queue", agent_id, target_os)
 
 
 def process_one_job(
@@ -177,10 +189,17 @@ def run(
     stop_flag = stop_flag or _install_signal_stop()
     session_factory = session_factory or get_sessionmaker()
 
-    log.info("worker starting: queue=%s source=%s", QUEUE_KEY, config.agent_source_root)
+    # This worker builds for its own host OS only; consume that OS's queue.
+    key = queue_key(compiler.builder_os())
+    log.info(
+        "worker starting: os=%s queue=%s source=%s",
+        compiler.builder_os(),
+        key,
+        config.agent_source_root,
+    )
     while not stop_flag.is_set():
         try:
-            item = redis_client.brpop(QUEUE_KEY, timeout=POLL_TIMEOUT_SECONDS)
+            item = redis_client.brpop(key, timeout=POLL_TIMEOUT_SECONDS)
         except Exception as exc:  # noqa: BLE001
             # Redis blip - back off briefly and keep going. The alternative
             # is dying, which loses the whole worker for one transient error.

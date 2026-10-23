@@ -169,6 +169,45 @@ Verify it's gone with `launchctl list | grep lisa` (should print nothing).
 
 ---
 
+## Build workers (per OS)
+
+Nuitka compiles for the host it runs on and cannot cross-compile, so there is
+one build worker per target OS, each draining its own Redis queue
+(`lisa:builder:jobs:<os>`). A worker only pops jobs for the OS it can build, so
+a Linux worker never picks up a macOS job and vice versa.
+
+- **Linux** is built by the `builder` service in `docker-compose.yml` (runs on
+  `linux/amd64`). This is the default; `BUILDABLE_OS=["linux"]`.
+- **macOS** needs a worker running on a Mac. Nuitka can't produce a Mach-O
+  binary from Linux.
+
+### Running a macOS build worker
+
+On a macOS host that can reach the same Postgres and Redis as the backend:
+
+```sh
+pip install -r backend/requirements.txt nuitka
+export LISA_AGENT_SOURCE_ROOT="$PWD/agent/lisa_agent"
+export LISA_BACKEND_URL="https://<backend-host>"   # what the agent phones home to
+export DATABASE_URL=...        # same DB as the backend
+export REDIS_URL=...           # same Redis as the backend
+python -m app.services.agent_builder   # from backend/, drains the macos queue
+```
+
+The worker logs `os=macos queue=lisa:builder:jobs:macos` on startup. Then tell
+the backend a macOS worker exists so it enqueues macOS builds instead of
+refusing them:
+
+```sh
+# backend environment
+BUILDABLE_OS=["linux", "macos"]
+```
+
+Without this, a macOS agent is created but its build status is `unsupported_os`
+and nothing is queued (so it never hangs waiting for a worker that isn't there).
+
+---
+
 ## Troubleshooting
 
 **Installer says "agent process died within a second of launch":**
