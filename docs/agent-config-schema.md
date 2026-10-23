@@ -144,6 +144,31 @@ per application.
 `weight` biases random activity selection; `min/max_duration` bound how long an
 activity runs.
 
+### Per-OS commands
+
+Any command field in `installation` and `execution` (`open_command`,
+`close_command`, `check_command`, `install_commands`, `post_install_commands`)
+may be either a plain string/list (shared across every OS) or an object keyed
+by OS name. The agent resolves it for the OS it runs on (see `agent_info.os_type`):
+
+```json
+"execution": {
+  "open_command":  { "linux": "discord", "macos": "open -a Discord" },
+  "close_command": { "linux": "pkill -f discord", "macos": "osascript -e 'quit app \"Discord\"'" }
+},
+"installation": {
+  "install_commands": {
+    "linux": ["sudo apt install -y discord"],
+    "macos": ["brew install --cask discord"]
+  }
+}
+```
+
+Resolution order for an object: the current OS key, then `default`, else the
+command is treated as absent (a missing open/close command is simply skipped).
+A plain string/list keeps working unchanged, so existing Linux plugins need no
+edits.
+
 ### Design note (from the customer)
 
 SOC analysts only see **OS-level** events (process start/stop, file, network,
