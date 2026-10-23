@@ -3,11 +3,14 @@
 from collections.abc import Iterator
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
+
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None

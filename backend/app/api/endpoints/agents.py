@@ -2,7 +2,6 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -144,7 +143,7 @@ def list_agents(
         query = query.filter(Agent.os_type == os_type)
     if role_id:
         query = query.filter(Agent.role_id == role_id)
-    return query.order_by(desc(Agent.created_at)).offset(skip).limit(limit).all()
+    return query.order_by(Agent.created_at.desc()).offset(skip).limit(limit).all()
 
 
 @router.get("/agents/{agent_id}/status")
@@ -155,7 +154,7 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
     recent = (
         db.query(AgentActivity)
         .filter(AgentActivity.agent_id == agent.id)
-        .order_by(desc(AgentActivity.timestamp))
+        .order_by(AgentActivity.timestamp.desc())
         .limit(10)
         .all()
     )
