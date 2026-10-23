@@ -35,10 +35,10 @@ def test_copies_all_python_sources(tmp_path):
     result = copy_agent_sources(src, dst)
 
     assert len(result) == 4
-    assert (dst / "main.py").is_file()
-    assert (dst / "activity.py").is_file()
-    assert (dst / "config.py").is_file()
-    assert (dst / "package.py").is_file()
+    assert (dst / "lisa_agent" / "main.py").is_file()
+    assert (dst / "lisa_agent" / "activity.py").is_file()
+    assert (dst / "lisa_agent" / "config.py").is_file()
+    assert (dst / "lisa_agent" / "package.py").is_file()
 
 
 def test_preserves_content(tmp_path):
@@ -50,8 +50,8 @@ def test_preserves_content(tmp_path):
         },
     )
     copy_agent_sources(src, dst)
-    assert (dst / "main.py").read_text() == "hello world"
-    assert (dst / "activity.py").read_text() == "print('activity')"
+    assert (dst / "lisa_agent" / "main.py").read_text() == "hello world"
+    assert (dst / "lisa_agent" / "activity.py").read_text() == "print('activity')"
 
 
 def test_copies_nested_subpackages(tmp_path):
@@ -66,8 +66,8 @@ def test_copies_nested_subpackages(tmp_path):
         },
     )
     copy_agent_sources(src, dst)
-    assert (dst / "adapters" / "xdotool.py").is_file()
-    assert (dst / "adapters" / "__init__.py").is_file()
+    assert (dst / "lisa_agent" / "adapters" / "xdotool.py").is_file()
+    assert (dst / "lisa_agent" / "adapters" / "__init__.py").is_file()
 
 
 # ---------- exclusions ----------
@@ -82,8 +82,8 @@ def test_skips_pycache(tmp_path):
         },
     )
     copy_agent_sources(src, dst)
-    assert (dst / "main.py").is_file()
-    assert not (dst / "__pycache__").exists()
+    assert (dst / "lisa_agent" / "main.py").is_file()
+    assert not (dst / "lisa_agent" / "__pycache__").exists()
 
 
 def test_skips_tests_directory(tmp_path):
@@ -96,8 +96,8 @@ def test_skips_tests_directory(tmp_path):
         },
     )
     copy_agent_sources(src, dst)
-    assert (dst / "main.py").is_file()
-    assert not (dst / "tests").exists()
+    assert (dst / "lisa_agent" / "main.py").is_file()
+    assert not (dst / "lisa_agent" / "tests").exists()
 
 
 def test_skips_mypy_and_pytest_caches(tmp_path):
@@ -110,8 +110,8 @@ def test_skips_mypy_and_pytest_caches(tmp_path):
         },
     )
     copy_agent_sources(src, dst)
-    assert not (dst / ".mypy_cache").exists()
-    assert not (dst / ".pytest_cache").exists()
+    assert not (dst / "lisa_agent" / ".mypy_cache").exists()
+    assert not (dst / "lisa_agent" / ".pytest_cache").exists()
 
 
 def test_skips_non_python_files(tmp_path):
@@ -126,8 +126,8 @@ def test_skips_non_python_files(tmp_path):
     )
     result = copy_agent_sources(src, dst)
     assert len(result) == 1
-    assert (dst / "main.py").is_file()
-    assert not (dst / "README.md").exists()
+    assert (dst / "lisa_agent" / "main.py").is_file()
+    assert not (dst / "lisa_agent" / "README.md").exists()
 
 
 # ---------- error cases ----------

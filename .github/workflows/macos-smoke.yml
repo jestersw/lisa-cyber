@@ -1,0 +1,39 @@
+name: macos-smoke
+
+# End-to-end macOS build smoke test (#199): build the agent through the real
+# pipeline and assert the produced binary sends a heartbeat. Runs only when the
+# agent or builder changes (a Nuitka build takes a couple of minutes), plus on
+# demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent/**'
+      - 'backend/app/services/agent_builder/**'
+      - 'backend/scripts/smoke_macos_build.py'
+      - '.github/workflows/macos-smoke.yml'
+  pull_request:
+    paths:
+      - 'agent/**'
+      - 'backend/app/services/agent_builder/**'
+      - 'backend/scripts/smoke_macos_build.py'
+      - '.github/workflows/macos-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build + agent deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -e agent nuitka
+      - name: Build agent and assert heartbeat
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: python scripts/smoke_macos_build.py
