@@ -9,7 +9,7 @@ SCHED = WorkSchedule()  # Mon-Fri 09:00-18:00, lunch window 13:00-15:00
 
 def dt(*args) -> datetime:
     """Build a naive local-time datetime for tests (no tz needed, see schedule.py)."""
-    return datetime(*args)  # noqa: DTZ001
+    return datetime(*args)
 
 
 class FakeClock:

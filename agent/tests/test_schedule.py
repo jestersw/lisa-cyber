@@ -21,7 +21,7 @@ def dt(day: str, hhmm: str) -> datetime:
     days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     base_day = 1 + days.index(day)  # 2024-01-01 is a Monday
     h, m = map(int, hhmm.split(":"))
-    return datetime(2024, 1, base_day, h, m)  # noqa: DTZ001
+    return datetime(2024, 1, base_day, h, m)
 
 
 def test_workday_true_on_weekdays():
