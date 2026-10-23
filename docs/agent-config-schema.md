@@ -135,11 +135,25 @@ per application.
 
 ### Command types (inside `activities[].commands`)
 
-| type              | fields          | meaning                       |
-|-------------------|-----------------|-------------------------------|
-| `key`             | `key`, `delay`  | press a single key            |
-| `key_combination` | `keys`, `delay` | press a chord (e.g. `ctrl+s`) |
-| `type_text`       | `text`, `delay` | type a string                 |
+| type              | fields                  | meaning                                          |
+|-------------------|-------------------------|--------------------------------------------------|
+| `key`             | `key`, `delay`          | press a single key                               |
+| `key_combination` | `keys`, `delay`         | press a chord (e.g. `ctrl+s`)                    |
+| `type_text`       | `text`, `delay`         | type a string                                    |
+| `http_request`    | `url`, `delay`          | GET the URL (curl); http/https only              |
+| `dns_lookup`      | `host`, `delay`         | resolve a hostname (nslookup)                    |
+| `ldap_query`      | `host`, `port`, `delay` | open a TCP connection to the LDAP port (def 389) |
+| `file_create`     | `target`, `delay`       | create a file in the sandbox                     |
+| `file_rename`     | `target`, `dest`        | rename a sandbox file                            |
+| `file_copy`       | `target`, `dest`        | copy a sandbox file                              |
+| `file_delete`     | `target`, `delay`       | delete a sandbox file                            |
+
+Network and file commands are OS-neutral (POSIX tools present on Linux and
+macOS). File activity is confined to a per-user sandbox (`~/.lisa/activity`);
+`target`/`dest` must be plain filenames — path separators and `..` are rejected,
+so activity can never touch anything outside the sandbox. These exist to produce
+realistic process / network / file **events** for monitoring, per the customer
+note above — not payloads.
 
 `weight` biases random activity selection; `min/max_duration` bound how long an
 activity runs.
