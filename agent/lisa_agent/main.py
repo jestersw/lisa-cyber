@@ -20,11 +20,12 @@ import logging
 import os
 import sys
 
-from lisa_agent.activity import ActivityEngine
+from lisa_agent.activity import ActivityEngine, Application
 from lisa_agent.config import Config, WorkSchedule
 from lisa_agent.heartbeat import HeartbeatLoop, HeartbeatSender, build_payload
 from lisa_agent.installer import ensure_all_installed
 from lisa_agent.mutex import AgentMutex
+from lisa_agent.nextapp import NextAppClient
 from lisa_agent.orchestrator import Agent
 from lisa_agent.package import DeploymentPackage, PackageError
 from lisa_agent.platform_ops import current_os
@@ -69,6 +70,23 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
 
     engine = ActivityEngine()
 
+    # Live next-app source: ask the backend's ML endpoint which app to switch
+    # to, falling back to the local model inside the orchestrator when it
+    # returns None (backend down or no trained model). See issue #57.
+    next_app_client = NextAppClient(
+        backend_url=env_config.backend_url,
+        agent_id=identity.agent_id,
+        token=env_config.auth_token,
+    )
+
+    def next_app_provider(
+        apps: list[Application], current: Application | None
+    ) -> Application | None:
+        name = next_app_client.fetch(current.name if current else None)
+        if name is None:
+            return None
+        return next((a for a in apps if a.name == name), None)
+
     # Heartbeat: one sender, wrapped in a loop that runs on a background thread.
     sender = HeartbeatSender(
         url=f"{env_config.backend_url}/api/agents/heartbeat",
@@ -104,6 +122,7 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
             int(behavior.inactive_period.max),
         ),
         transition_model=pkg.transition_model,
+        next_app_provider=next_app_provider,
     )
     return agent
 

@@ -74,7 +74,7 @@ class FakeMutex:
         self.released = True
 
 
-def make_agent(clock, *, stop_after_ticks=None, apps=None, schedule=None):
+def make_agent(clock, *, stop_after_ticks=None, apps=None, schedule=None, next_app_provider=None):
     apps = apps or [
         Application("editor", open_cmd="x"),
         Application("browser", open_cmd="y"),
@@ -105,6 +105,7 @@ def make_agent(clock, *, stop_after_ticks=None, apps=None, schedule=None):
         session_max=1,
         switch_pause_range=(0, 0),
         inactive_period_range=(1000, 1000),  # effectively disabled in short tests
+        next_app_provider=next_app_provider,
     )
     return agent, engine, heartbeat, mutex
 
@@ -185,3 +186,37 @@ def test_stop_is_honoured_promptly_via_interruptible_sleep():
     # The 60s off-hours sleep is interruptible; stopping after 1 tick must not
     # block for the full duration (fake_sleep is called exactly once here).
     assert mutex.released is True
+
+
+def test_next_app_provider_drives_selection():
+    # The provider (e.g. the backend ML endpoint) decides which app opens next.
+    apps = [Application("editor", open_cmd="x"), Application("browser", open_cmd="y")]
+    clock = FakeClock(dt(2024, 1, 1, 10, 0))  # Monday, working hours
+
+    calls = {"n": 0}
+
+    def provider(available, _current):
+        calls["n"] += 1
+        return next(a for a in available if a.name == "browser")
+
+    agent, engine, _hb, _mutex = make_agent(
+        clock, stop_after_ticks=4, apps=apps, next_app_provider=provider
+    )
+    agent.start()
+
+    assert calls["n"] >= 1
+    assert "browser" in engine.opened
+    assert "editor" not in engine.opened
+
+
+def test_falls_back_locally_when_provider_returns_none():
+    apps = [Application("editor", open_cmd="x"), Application("browser", open_cmd="y")]
+    clock = FakeClock(dt(2024, 1, 1, 10, 0))
+
+    agent, engine, _hb, _mutex = make_agent(
+        clock, stop_after_ticks=4, apps=apps, next_app_provider=lambda *_: None
+    )
+    agent.start()
+
+    # Provider gave nothing, so the local fallback still opened some app.
+    assert engine.opened
