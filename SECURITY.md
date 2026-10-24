@@ -26,8 +26,11 @@ no obvious, well-known classes of vulnerability (roughly, the OWASP Top 10).
 
 - **Operator → LISA.** Operators are trusted. They author roles, templates, and
   decide where agents are deployed.
-- **Agent → Backend.** The agent authenticates to the backend with a bearer
-  token (`LISA_AGENT_TOKEN`). The backend is responsible for verifying it.
+- **Agent → Backend.** Each agent authenticates to the backend with its own
+  bearer token (`LISA_AGENT_TOKEN`), unique per agent and issued per build. The
+  backend stores only the token's hash and verifies each agent-facing request
+  against that specific agent's token, so a leaked or rotated token affects only
+  one agent rather than a shared secret.
 - **Backend → Agent.** Configuration and activity templates flow from the
   backend to the agent. The agent treats template command strings as trusted
   (they originate from operators), and runs them via the shell.
@@ -67,11 +70,13 @@ Tracks the state of each hardening item. This is a living list.
 - Secret scanning (`gitleaks`) in pre-commit and CI.
 - All secrets moved to environment variables; none hardcoded.
 - `.env.example` documenting required configuration.
+- Per-agent backend authentication (#201). Each agent has its own token (hashed
+  at rest), and every agent-facing request is verified against that agent's
+  token; a missing or wrong token is rejected (dev/unbuilt agents stay open).
 
 **In progress**
-- Agent → backend authentication. The agent already sends a bearer token; the
-  backend needs to verify it and reject requests with a missing or invalid
-  token. (Backend + agent; needs coordination.)
+- Issuing the per-agent token at install time instead of baking it into the
+  built binary (#201 follow-up), so the token never sits in the stored artefact.
 
 **Planned**
 - Operator authentication for the web panel. *Open question — not yet designed:*

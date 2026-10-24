@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_sessionmaker
 from app.models.models import Agent
+from app.security import hash_agent_token
 from app.services.agent_builder import compiler
 from app.services.agent_builder.builder import BuildError, build_agent
 
@@ -129,10 +130,12 @@ def process_one_job(
             log.error("job for unknown agent %s, dropping", agent_id)
             return
 
-        # A fresh token per build. Rotating the token means rebuilding the
-        # binary, which matches how the builder works anyway.
+        # A fresh per-agent token per build. Rotating the token means rebuilding
+        # the binary, which matches how the builder works anyway. The plaintext
+        # `token` is baked into this agent's binary; only its hash is stored, so
+        # the server never keeps the token itself (#201).
         token = secrets.token_urlsafe(32)
-        agent.agent_token = token
+        agent.agent_token = hash_agent_token(token)
         agent.status = "building"
         session.commit()
 

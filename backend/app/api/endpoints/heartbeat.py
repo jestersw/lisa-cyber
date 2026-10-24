@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.models import Agent, AgentActivity
 from app.ratelimit import rate_limit
 from app.schemas import AgentHeartbeatRequest, AgentHeartbeatResponse
-from app.security import require_agent_token, require_operator
+from app.security import agent_token_matches, require_operator
 
 router = APIRouter()
 
@@ -27,12 +27,21 @@ def _interval_seconds(agent: Agent) -> int:
 @router.post(
     "/agents/heartbeat",
     response_model=AgentHeartbeatResponse,
-    dependencies=[Depends(require_agent_token), Depends(rate_limit())],
+    dependencies=[Depends(rate_limit())],
 )
-def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
+def receive_heartbeat(
+    hb: AgentHeartbeatRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
     agent = db.query(Agent).filter(Agent.agent_id == hb.agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    # Per-agent token check (#201). The agent id is in the body, not the path,
+    # so this can't use the require_agent dependency; validate here instead.
+    # Agents with no token yet (dev/tests) stay open, like the other guards.
+    if agent.agent_token is not None and not agent_token_matches(authorization, agent.agent_token):
+        raise HTTPException(status_code=401, detail="Invalid or missing agent token")
 
     agent.status = hb.status
     agent.last_seen = _utcnow()

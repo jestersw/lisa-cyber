@@ -7,19 +7,20 @@ from app.database import get_db
 from app.models.models import ActivityEvent, Agent
 from app.ratelimit import rate_limit
 from app.schemas import ActivityEventBatch, ActivityEventResponse
-from app.security import require_agent_token, require_operator
+from app.security import require_agent, require_operator
 
 router = APIRouter()
 
 
 @router.post(
     "/agents/{agent_id}/events",
-    dependencies=[Depends(require_agent_token), Depends(rate_limit())],
+    dependencies=[Depends(rate_limit())],
 )
-def ingest_events(agent_id: str, batch: ActivityEventBatch, db: Session = Depends(get_db)):
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+def ingest_events(
+    batch: ActivityEventBatch,
+    agent: Agent = Depends(require_agent),
+    db: Session = Depends(get_db),
+):
     role_name = agent.role.name if agent.role else None
     for event in batch.events:
         db.add(
@@ -34,7 +35,7 @@ def ingest_events(agent_id: str, batch: ActivityEventBatch, db: Session = Depend
             )
         )
     db.commit()
-    return {"agent_id": agent_id, "ingested": len(batch.events)}
+    return {"agent_id": agent.agent_id, "ingested": len(batch.events)}
 
 
 @router.get(
