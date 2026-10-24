@@ -15,13 +15,16 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Legacy shared agent token. Superseded by per-agent tokens (#201): agents
+    # now authenticate with their own token (hashed on the server), so this is
+    # no longer used for auth. Kept for backward compatibility / config parsing.
     agent_token: str | None = None
     public_base_url: str = "http://localhost:8000"
 
     # Operator (panel) auth. When operator_password is unset the operator
-    # endpoints are open — dev mode, matching agent_token above. jwt_secret
-    # signs the login tokens; when unset it is derived from operator_password
-    # so a single env var (OPERATOR_PASSWORD) is enough to lock the panel.
+    # endpoints are open — dev mode. jwt_secret signs the login tokens; when
+    # unset it is derived from operator_password so a single env var
+    # (OPERATOR_PASSWORD) is enough to lock the panel.
     operator_password: str | None = None
     jwt_secret: str | None = None
     jwt_ttl_minutes: int = 720

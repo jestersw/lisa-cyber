@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_sessionmaker
 from app.models.models import Agent
+from app.security import hash_agent_token
 from app.services.agent_builder import compiler
 from app.services.agent_builder.builder import BuildError, build_agent
 
@@ -129,10 +130,15 @@ def process_one_job(
             log.error("job for unknown agent %s, dropping", agent_id)
             return
 
-        # A fresh token per build. Rotating the token means rebuilding the
-        # binary, which matches how the builder works anyway.
-        token = secrets.token_urlsafe(32)
-        agent.agent_token = token
+        # A fresh one-time enrollment token per build (#201 part B). Only its
+        # hash is stored, and the plaintext is baked into this agent's binary;
+        # the agent exchanges it for its real token on first run (POST
+        # /agents/{id}/enroll). The real token is never baked into the artefact.
+        # A rebuild mints a new enrollment token and resets the enrolled state.
+        enrollment_token = secrets.token_urlsafe(32)
+        agent.enrollment_token_hash = hash_agent_token(enrollment_token)
+        agent.agent_token = None
+        agent.enrolled = False
         agent.status = "building"
         session.commit()
 
@@ -140,7 +146,7 @@ def process_one_job(
             result = build_agent(
                 agent_id=agent_id,
                 deployment_package=_package_from_config(agent),
-                agent_token=token,
+                agent_token=enrollment_token,
                 backend_url=config.backend_url,
                 agent_source_root=config.agent_source_root,
                 target_os=agent.os_type or "linux",

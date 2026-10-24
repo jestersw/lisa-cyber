@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.models import Agent, AgentActivity
 from app.ratelimit import rate_limit
 from app.schemas import AgentHeartbeatRequest, AgentHeartbeatResponse
-from app.security import require_agent_token, require_operator
+from app.security import agent_is_secured, agent_token_matches, require_operator
 
 router = APIRouter()
 
@@ -27,12 +27,23 @@ def _interval_seconds(agent: Agent) -> int:
 @router.post(
     "/agents/heartbeat",
     response_model=AgentHeartbeatResponse,
-    dependencies=[Depends(require_agent_token), Depends(rate_limit())],
+    dependencies=[Depends(rate_limit())],
 )
-def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
+def receive_heartbeat(
+    hb: AgentHeartbeatRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
     agent = db.query(Agent).filter(Agent.agent_id == hb.agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    # Per-agent token check (#201). The agent id is in the body, not the path,
+    # so this can't use the require_agent dependency; validate here instead.
+    # A built agent (secured) must present its real token; a never-built dev/test
+    # agent stays open. A built-but-not-enrolled agent has no real token yet and
+    # is rejected until it enrolls.
+    if agent_is_secured(agent) and not agent_token_matches(authorization, agent.agent_token):
+        raise HTTPException(status_code=401, detail="Invalid or missing agent token")
 
     agent.status = hb.status
     agent.last_seen = _utcnow()

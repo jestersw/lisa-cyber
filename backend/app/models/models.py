@@ -5,9 +5,11 @@ from datetime import datetime
 from sqlalchemy import (
     JSON,
     TIMESTAMP,
+    Boolean,
     ForeignKey,
     String,
     Text,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -88,7 +90,15 @@ class Agent(Base):
         ForeignKey("behavior_templates.id"), default=None
     )
     binary_url: Mapped[str | None] = mapped_column(String(500), default=None)
+    # Real per-agent token, hashed, set when the agent enrolls (#201). Null
+    # before enrollment.
     agent_token: Mapped[str | None] = mapped_column(String(200), default=None)
+    # One-time enrollment token (hashed), baked into the built binary; the agent
+    # exchanges it for its real token at install time, then it is cleared (#201
+    # part B). Null for dev agents that were never built.
+    enrollment_token_hash: Mapped[str | None] = mapped_column(String(200), default=None)
+    # True once the agent has exchanged its enrollment token for a real one.
+    enrolled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     installer_url: Mapped[str | None] = mapped_column(String(500), default=None)
     version_info: Mapped[dict | None] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, server_default=func.now())
