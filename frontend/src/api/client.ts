@@ -42,7 +42,19 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+interface RequestOptions {
+  // When true, a 401 does NOT clear the operator session / redirect to login.
+  // Used for agent-token-only endpoints the operator panel reads best-effort
+  // (agent config, next-activity): the operator can't authenticate to them when
+  // an agent token is enforced, and that must not look like an expired session.
+  silent401?: boolean;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  opts: RequestOptions = {},
+): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (authToken) {
@@ -52,10 +64,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, { ...init, headers });
 
   if (response.status === 401) {
-    setToken(null);
-    // Let the app route back to the login screen (listener in App).
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("lisa:auth-expired"));
+    if (!opts.silent401) {
+      setToken(null);
+      // Let the app route back to the login screen (listener in App).
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("lisa:auth-expired"));
+      }
     }
     throw new ApiError(401, "Unauthorized");
   }
@@ -70,7 +84,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, opts?: RequestOptions) => request<T>(path, {}, opts),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body: unknown) =>
@@ -289,8 +303,13 @@ export const endpoints = {
   agents: () => api.get<Agent[]>("/api/agents"),
   agentStatus: (agentId: string) => api.get<AgentStatus>(`/api/agents/${agentId}/status`),
   agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),
-  agentConfig: (agentId: string) => api.get<DeploymentPackage>(`/api/agents/${agentId}/config`),
-  nextActivity: (agentId: string) => api.get<NextActivity>(`/api/agents/${agentId}/next-activity`),
+  // config + next-activity are agent-token endpoints; the operator reads them
+  // best-effort (silent on 401 so a missing agent token doesn't log the
+  // operator out — see RequestOptions.silent401).
+  agentConfig: (agentId: string) =>
+    api.get<DeploymentPackage>(`/api/agents/${agentId}/config`, { silent401: true }),
+  nextActivity: (agentId: string) =>
+    api.get<NextActivity>(`/api/agents/${agentId}/next-activity`, { silent401: true }),
   deployments: (agentId: string) => api.get<Deployment[]>(`/api/agents/${agentId}/deployments`),
   deployAgent: (agentId: string, body: DeployRequest) =>
     api.post<Deployment>(`/api/agents/${agentId}/deploy`, body),
