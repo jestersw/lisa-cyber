@@ -17,13 +17,28 @@ The FastAPI app decides the host/scheme when serving the file.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger("lisa.builder.storage")
 
-DEFAULT_STORAGE_ROOT = Path("/var/lisa/builds")
+
+def resolve_builds_root() -> Path:
+    """Directory where built artefacts are stored and served from.
+
+    Overridable via LISA_BUILDS_DIR. This matters for the per-OS build model:
+    the macOS/Windows workers run outside the backend's container, so they can't
+    use its docker volume. Pointing both the worker and the backend at one
+    shared host directory (bind-mounted into the backend) lets a worker's
+    artefacts be served by the backend — otherwise the panel can't offer the
+    installer and Ansible can't fetch it. Defaults to /var/lisa/builds.
+    """
+    return Path(os.environ.get("LISA_BUILDS_DIR") or "/var/lisa/builds")
+
+
+DEFAULT_STORAGE_ROOT = resolve_builds_root()
 
 
 class StorageError(RuntimeError):
