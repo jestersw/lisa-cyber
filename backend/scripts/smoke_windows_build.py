@@ -76,7 +76,11 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     agent_src = repo_root / "agent" / "lisa_agent"
 
-    with tempfile.TemporaryDirectory() as tmp:
+    # ignore_cleanup_errors: a Nuitka onefile .exe can briefly keep its own file
+    # open after we stop it, and Windows refuses to unlink an open file. We kill
+    # the process tree below to release it; this is a belt-and-suspenders so a
+    # residual lock can never turn a passing smoke into a teardown failure.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmp_path = Path(tmp)
         print(f"building {AGENT_ID} for windows via build_agent() ...")
         result = build_agent(
@@ -113,11 +117,21 @@ def main() -> int:
                     return 1
                 time.sleep(1)
         finally:
-            proc.terminate()
+            # A Nuitka onefile launches a child process that holds the .exe
+            # open; terminating only the parent leaves the file locked, which
+            # then breaks temp-dir cleanup. taskkill /T kills the whole tree.
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                capture_output=True,
+                check=False,
+            )
             try:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
+            # Give Windows a moment to release the file handle before the
+            # TemporaryDirectory context tries to delete the .exe.
+            time.sleep(1)
             server.shutdown()
 
         if not _heartbeats:
