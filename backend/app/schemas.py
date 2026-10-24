@@ -385,6 +385,39 @@ class DeploymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DiagnosisFinding(BaseModel):
+    issue: str
+    evidence: str | None = None
+    severity: Literal["info", "warning", "critical"] = "info"
+
+
+class DiagnosisChange(BaseModel):
+    # What part of the agent config to change, in plain words (e.g.
+    # "slack plugin open_command" or "schedule work hours"), and the fix.
+    target: str
+    change: str
+
+
+class AgentDiagnosis(BaseModel):
+    """The LLM's structured analysis of one agent's behaviour."""
+
+    summary: str
+    findings: list[DiagnosisFinding] = Field(default_factory=list)
+    suggested_changes: list[DiagnosisChange] = Field(default_factory=list)
+
+
+class DiagnoseResponse(BaseModel):
+    agent_id: str
+    # "model" when the LLM produced the analysis; "unavailable" when the LLM
+    # was down or returned junk and we fell back to the collected signals.
+    source: Literal["model", "unavailable"]
+    summary: str
+    findings: list[DiagnosisFinding] = Field(default_factory=list)
+    suggested_changes: list[DiagnosisChange] = Field(default_factory=list)
+    # The raw signals the analysis is grounded in, so the panel can show them.
+    signals: dict
+
+
 class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 

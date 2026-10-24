@@ -170,6 +170,68 @@ def parse_plugin(raw: str) -> dict | None:
     return plugin.model_dump(exclude_none=True)
 
 
+def build_diagnosis_prompt(signals: dict, observations: list[str]) -> str:
+    observed = (
+        "\n".join(f"- {o}" for o in observations)
+        if observations
+        else "- (no automatic observations; rely on the signals)"
+    )
+    return (
+        "You are a debugging assistant for LISA, a cyber-range activity simulator. "
+        "Each agent simulates a user's application activity on a host and reports "
+        "heartbeats and activity events to the backend. Given one agent's collected "
+        "signals, explain why it may be misbehaving and propose concrete config fixes. "
+        "Ground every finding in the data; do not invent signals that aren't present. "
+        "If the agent looks healthy, say so plainly.\n\n"
+        f"Automatic observations:\n{observed}\n\n"
+        f"Signals (JSON):\n{json.dumps(signals, indent=2, default=str)}\n\n"
+        "Return ONLY a JSON object with these keys: "
+        "summary (one or two sentences), "
+        "findings (array of objects with issue, evidence, severity one of "
+        "info|warning|critical), "
+        "suggested_changes (array of objects with target and change, each a short "
+        "actionable config fix — e.g. a plugin open_command, a missing plugin, a "
+        "schedule that never runs). "
+        "Keep findings and suggested_changes empty if the agent is healthy. "
+        "Do not add keys beyond those listed."
+    )
+
+
+def parse_diagnosis(raw: str) -> dict | None:
+    from pydantic import ValidationError
+
+    from app.schemas import AgentDiagnosis
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        obj = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    try:
+        return AgentDiagnosis(**obj).model_dump()
+    except (ValidationError, TypeError):
+        return None
+
+
+def generate_diagnosis(signals: dict, observations: list[str], attempts: int = 2) -> dict | None:
+    """Run the agent's signals through the LLM and return a parsed diagnosis,
+    or None when the provider is unavailable or returns invalid JSON."""
+    prompt = build_diagnosis_prompt(signals, observations)
+    for _ in range(max(1, attempts)):
+        try:
+            raw = get_provider().generate(prompt)
+        except LLMError:
+            return None
+        diagnosis = parse_diagnosis(raw)
+        if diagnosis is not None:
+            return diagnosis
+    return None
+
+
 def generate_plugin(
     name: str, os_type: str, description: str | None = None, attempts: int = 3
 ) -> dict | None:

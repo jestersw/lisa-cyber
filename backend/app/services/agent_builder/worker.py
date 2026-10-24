@@ -147,14 +147,14 @@ def process_one_job(
             )
         except BuildError as exc:
             log.error("build %s failed to start: %s", agent_id, exc)
-            _mark_failed(session, agent)
+            _mark_failed(session, agent, str(exc))
             return
-        except Exception:
+        except Exception as exc:
             # Any other unexpected error: log it, mark the agent failed, keep
             # the worker alive for the next job. log.exception grabs the
             # traceback automatically.
             log.exception("build %s crashed unexpectedly", agent_id)
-            _mark_failed(session, agent)
+            _mark_failed(session, agent, f"unexpected build error: {exc}")
             return
 
         if result.success:
@@ -170,7 +170,7 @@ def process_one_job(
             )
         else:
             log.warning("build %s: nuitka rejected the code", agent_id)
-            _mark_failed(session, agent)
+            _mark_failed(session, agent, result.stderr)
 
 
 def run(
@@ -238,8 +238,15 @@ def _package_from_config(agent: Agent) -> dict[str, Any]:
     return {"agent_config": config, "application_plugins": {}}
 
 
-def _mark_failed(session: Session, agent: Agent) -> None:
+def _mark_failed(session: Session, agent: Agent, error: str | None = None) -> None:
     agent.status = "failed"
+    if error:
+        # Keep a tail of the failure (Nuitka stderr / exception) so the diagnose
+        # assistant (#211) and the operator can see *why* the build failed, not
+        # just that it did. version_info is a JSON blob, so no schema change.
+        info = dict(agent.version_info or {})
+        info["last_build_error"] = str(error)[-2000:]
+        agent.version_info = info
     session.commit()
 
 
