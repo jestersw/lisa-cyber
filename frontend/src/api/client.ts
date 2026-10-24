@@ -87,16 +87,21 @@ export interface TokenResponse {
 export interface Role {
   id: number;
   name: string;
-  description: string;
-  category: string;
+  description: string | null;
+  category: string | null;
+  is_active: boolean;
+  created_at?: string;
 }
 
 export interface BehaviorTemplate {
   id: number;
   name: string;
-  role_id: number;
+  description?: string | null;
+  role_id: number | null;
   os_type: string;
-  template_data: { applications_used?: string[] };
+  version?: string;
+  is_active?: boolean;
+  template_data: { applications_used?: string[]; [key: string]: unknown };
 }
 
 export interface ApplicationTemplate {
@@ -104,7 +109,19 @@ export interface ApplicationTemplate {
   name: string;
   display_name: string | null;
   category: string | null;
+  description?: string | null;
   os_type: string;
+  version?: string;
+  author?: string | null;
+  is_active?: boolean;
+  template_config?: Record<string, unknown>;
+}
+
+export interface MlStatus {
+  models_dir: string;
+  shared_loaded: boolean;
+  shared_states: number;
+  [key: string]: unknown;
 }
 
 export interface Agent {
@@ -229,8 +246,39 @@ export const endpoints = {
   },
   logout: (): void => setToken(null),
   roles: () => api.get<Role[]>("/api/roles"),
+  createRole: (body: { name: string; description?: string; category?: string }) =>
+    api.post<Role>("/api/roles", body),
+  updateRole: (id: number, body: Partial<Role>) => api.put<Role>(`/api/roles/${id}`, body),
+  deleteRole: (id: number) => api.del<void>(`/api/roles/${id}`),
   behaviorTemplates: () => api.get<BehaviorTemplate[]>("/api/behavior-templates"),
+  createBehaviorTemplate: (body: {
+    name: string;
+    description?: string;
+    role_id: number;
+    template_data: Record<string, unknown>;
+    os_type: string;
+  }) => api.post<BehaviorTemplate>("/api/behavior-templates", body),
+  updateBehaviorTemplate: (id: number, body: Partial<BehaviorTemplate>) =>
+    api.put<BehaviorTemplate>(`/api/behavior-templates/${id}`, body),
+  deleteBehaviorTemplate: (id: number) => api.del<void>(`/api/behavior-templates/${id}`),
   applicationTemplates: () => api.get<ApplicationTemplate[]>("/api/application-templates"),
+  createApplicationTemplate: (body: {
+    name: string;
+    display_name?: string;
+    category?: string;
+    template_config: Record<string, unknown>;
+    os_type: string;
+  }) => api.post<ApplicationTemplate>("/api/application-templates", body),
+  updateApplicationTemplate: (id: number, body: Partial<ApplicationTemplate>) =>
+    api.put<ApplicationTemplate>(`/api/application-templates/${id}`, body),
+  deleteApplicationTemplate: (id: number) => api.del<void>(`/api/application-templates/${id}`),
+  generatePlugin: (body: { name: string; os_type: string; description?: string }) =>
+    api.post<{ name: string; os_type: string; template_config: Record<string, unknown> }>(
+      "/api/application-templates/generate",
+      body,
+    ),
+  mlStatus: () => api.get<MlStatus>("/api/ml/status"),
+  mlReload: () => api.post<{ reloaded: boolean }>("/api/ml/reload", {}),
   agents: () => api.get<Agent[]>("/api/agents"),
   agentStatus: (agentId: string) => api.get<AgentStatus>(`/api/agents/${agentId}/status`),
   agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),
@@ -243,8 +291,10 @@ export const endpoints = {
   generateAgent: (body: Record<string, unknown>) =>
     api.post<GenerateAgentResponse>("/api/agents/generate", body),
   generateTemplate: (body: Record<string, unknown>) =>
-    api.post<{ name: string; template_data: Record<string, unknown> }>(
-      "/api/behavior-templates/generate",
-      body,
-    ),
+    api.post<{
+      name: string;
+      os_type: string;
+      template_data: Record<string, unknown>;
+      source: string;
+    }>("/api/behavior-templates/generate", body),
 };
