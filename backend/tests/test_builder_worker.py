@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.security import hash_agent_token
 from app.services.agent_builder.builder import BuildError
 from app.services.agent_builder.worker import (
     WorkerConfig,
@@ -134,11 +135,14 @@ def test_process_success_sets_status_ready_and_binary_url(tmp_path):
     assert agent.status == "ready"
     assert agent.binary_url == "/api/builds/USR001/agent_USR001"
     assert agent.agent_token is not None
-    assert len(agent.agent_token) > 20  # secrets.token_urlsafe(32) ~ 43 chars
+    assert len(agent.agent_token) == 64  # sha256 hex of the per-build token (#201)
 
     call_kwargs = mock_build.call_args.kwargs
     assert call_kwargs["agent_id"] == "USR001"
-    assert call_kwargs["agent_token"] == agent.agent_token
+    # The plaintext token is baked into the binary; the server stores only its
+    # hash, so the stored value is the hash of what was passed to the builder.
+    assert call_kwargs["agent_token"] != agent.agent_token
+    assert hash_agent_token(call_kwargs["agent_token"]) == agent.agent_token
     assert call_kwargs["backend_url"] == "http://b:8000"
     assert call_kwargs["target_os"] == "linux"
 

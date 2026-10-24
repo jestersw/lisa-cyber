@@ -1,13 +1,13 @@
 import random
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.models.models import Agent
 from app.models_store import get_store, restrict_model
-from app.security import require_agent_token, require_operator
+from app.security import require_agent, require_operator
 
 router = APIRouter()
 
@@ -41,17 +41,14 @@ def _global_counts(model: dict) -> dict[str, int]:
     return agg
 
 
-@router.get("/agents/{agent_id}/next-activity", dependencies=[Depends(require_agent_token)])
+@router.get("/agents/{agent_id}/next-activity")
 def next_activity(
-    agent_id: str,
     current: str | None = Query(default=None, max_length=200),
     sample: bool = Query(default=False),
+    agent: Agent = Depends(require_agent),
     db: Session = Depends(get_db),
 ):
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    agent_id = agent.agent_id
     applications = _agent_applications(agent)
     state = current or agent.last_activity
     model = get_store().for_role(_agent_role(agent))
