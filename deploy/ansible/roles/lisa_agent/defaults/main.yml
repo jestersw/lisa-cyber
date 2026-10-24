@@ -3,7 +3,17 @@
 # The installer is fetched from
 #   {{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh
 # Override per run: -e lisa_agent_backend_url=https://backend.corp.local
-lisa_agent_backend_url: "http://backend:8000"
+# The agent requires https unless the host is loopback or LISA_ALLOW_INSECURE_HTTP
+# is set (#55), so a real deployment should point this at an https backend.
+lisa_agent_backend_url: "https://backend:8000"
+
+# Operator API token used to authenticate the installer download (#202). The
+# build-artefact endpoint is no longer world-readable; obtain a token from the
+# panel login (POST /api/auth/login) and pass it per run:
+#   -e lisa_agent_api_token=<operator-jwt>
+# Left empty by default: when the backend runs in dev mode (no operator
+# password) downloads are open and no token is needed.
+lisa_agent_api_token: ""
 
 # Per-host agent identity. MUST be set per host in the inventory; the empty
 # default is deliberate so a misconfigured inventory fails loudly (see the

@@ -9,10 +9,18 @@ The builder produces two artefacts per agent:
 - **the raw binary** — ~28 MB, same agent, no wrapper: a Nuitka ELF on Linux
   (**`agent_<id>`**), a Mach-O on macOS, a PE on Windows (**`agent_<id>.exe`**).
 
-Both are served by `GET /api/builds/{agent_id}/{filename}`. Which one you
-use depends on how you get files onto the target VM. Below are the three
-patterns we support out of the box. They're not exclusive — the same
-installer works in all three. The Linux examples below use the `.sh`
+Both are served by `GET /api/builds/{agent_id}/{filename}`. This endpoint is
+authenticated (#202): the artefact embeds the agent's token, so it is not
+world-readable. The operator panel's download buttons work out of the box — it
+mints a short-lived, single-file download token and appends it to the link. For
+scripted downloads (curl, Ansible) pass an operator token obtained from
+`POST /api/auth/login`, either as `Authorization: Bearer <token>` or as a
+`?token=<token>` query parameter. When the backend runs in dev mode (no
+`OPERATOR_PASSWORD` set) the endpoint is open and no token is needed.
+
+Which artefact you use depends on how you get files onto the target VM. Below
+are the three patterns we support out of the box. They're not exclusive — the
+same installer works in all three. The Linux examples below use the `.sh`
 installer; for a Windows target substitute the `.ps1` (see the Windows section).
 
 ---
@@ -28,7 +36,7 @@ Put the following in `user-data` when creating the VM:
 ```yaml
 #cloud-config
 runcmd:
-  - curl -sSfL http://backend:8000/api/builds/USR001/installer_USR001.sh -o /tmp/lisa-installer.sh
+  - curl -sSfL -H "Authorization: Bearer $LISA_API_TOKEN" https://backend:8000/api/builds/USR001/installer_USR001.sh -o /tmp/lisa-installer.sh
   - chmod +x /tmp/lisa-installer.sh
   - /tmp/lisa-installer.sh
 ```
@@ -103,8 +111,8 @@ work — the installer is a plain executable, run it however you like.
 From the operator's workstation:
 
 ```sh
-# 1. Fetch the installer from the backend
-curl -sSfL http://backend:8000/api/builds/USR001/installer_USR001.sh -o installer.sh
+# 1. Fetch the installer from the backend (token from POST /api/auth/login)
+curl -sSfL -H "Authorization: Bearer $LISA_API_TOKEN" https://backend:8000/api/builds/USR001/installer_USR001.sh -o installer.sh
 
 # 2. Copy to the target VM
 scp installer.sh operator@target-vm:/tmp/

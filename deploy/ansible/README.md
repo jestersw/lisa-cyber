@@ -12,6 +12,12 @@ endpoint and runs it on the target:
 GET {{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh
 ```
 
+That endpoint is authenticated (#202). Unless the backend runs in dev mode (no
+operator password), set `lisa_agent_api_token` to an operator token (from
+`POST /api/auth/login`) and the role sends it as a `Bearer` header on the
+download. `lisa_agent_backend_url` should be `https` (the agent requires it,
+#55).
+
 Each host runs exactly one agent, identified by its `lisa_agent_id`. Linux and
 macOS are supported (Windows is tracked in #200).
 
@@ -36,7 +42,9 @@ macOS are supported (Windows is tracked in #200).
 2. Deploy:
 
    ```sh
-   ansible-playbook deploy-agents.yml -e lisa_agent_backend_url=http://backend:8000
+   ansible-playbook deploy-agents.yml \
+     -e lisa_agent_backend_url=https://backend:8000 \
+     -e lisa_agent_api_token="$LISA_API_TOKEN"
    ```
 
    (`ansible.cfg` points `inventory` at `inventory.ini`, so `-i` is optional.)
@@ -50,7 +58,8 @@ LaunchAgent, so the update is handled for you:
 
 ```sh
 ansible-playbook deploy-agents.yml \
-    -e lisa_agent_backend_url=http://backend:8000 \
+    -e lisa_agent_backend_url=https://backend:8000 \
+    -e lisa_agent_api_token="$LISA_API_TOKEN" \
     -e lisa_agent_force_reinstall=true
 ```
 
@@ -62,7 +71,8 @@ hosts.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `lisa_agent_backend_url` | `http://backend:8000` | Backend serving the installers. |
+| `lisa_agent_backend_url` | `https://backend:8000` | Backend serving the installers (agent requires https, #55). |
+| `lisa_agent_api_token` | `""` | Operator token for the authenticated installer download (#202). Empty = dev-mode backend (open). |
 | `lisa_agent_id` | `""` (**required per host**) | Agent identity for the host. Set as a host var. |
 | `lisa_agent_force_reinstall` | `false` | Re-deploy even if already installed (and stop the old Linux process first). |
 | `lisa_agent_linux_install_dir` | `/opt/lisa` | Where the Linux installer places the binary; used to detect an existing install. |

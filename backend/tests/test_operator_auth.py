@@ -3,6 +3,7 @@
 import pytest
 
 from app.config import get_settings
+from app.security import create_download_token, create_operator_token, verify_download_token
 
 
 @pytest.fixture
@@ -42,6 +43,29 @@ def test_login_then_access_with_token(client, secured):
 def test_garbage_token_rejected(client, secured):
     headers = {"Authorization": "Bearer not-a-jwt"}
     assert client.get("/api/roles", headers=headers).status_code == 401
+
+
+# ---------- build-artefact download tokens (#202) ----------
+
+
+def test_download_token_roundtrip(secured):
+    token = create_download_token("USR001", "agent_USR001")
+    assert verify_download_token(token, "USR001", "agent_USR001") is True
+
+
+def test_download_token_rejected_for_other_file(secured):
+    token = create_download_token("USR001", "agent_USR001")
+    assert verify_download_token(token, "USR001", "package.json") is False
+    assert verify_download_token(token, "USR999", "agent_USR001") is False
+
+
+def test_operator_jwt_is_not_a_valid_download_token(secured):
+    # An operator JWT has no download scope, so it must not pass as one.
+    assert verify_download_token(create_operator_token(), "USR001", "agent_USR001") is False
+
+
+def test_garbage_download_token_rejected(secured):
+    assert verify_download_token("not-a-jwt", "USR001", "agent_USR001") is False
 
 
 def test_agent_endpoint_not_affected_by_operator_token(client, secured):

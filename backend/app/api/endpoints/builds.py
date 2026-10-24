@@ -18,9 +18,10 @@ from __future__ import annotations
 import logging
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
+from app.security import require_download_access
 from app.services.agent_builder.storage import DEFAULT_STORAGE_ROOT
 
 log = logging.getLogger("lisa.api.builds")
@@ -41,12 +42,14 @@ def _validate_segment(segment: str, kind: str) -> None:
         raise HTTPException(status_code=400, detail=f"invalid {kind}: {segment!r}")
 
 
-@router.get("/builds/{agent_id}/{filename}")
+@router.get("/builds/{agent_id}/{filename}", dependencies=[Depends(require_download_access)])
 def download_build_artefact(agent_id: str, filename: str) -> FileResponse:
     """Serve a single artefact (binary or package.json) for one agent.
 
-    404 when the agent has no build on disk or the file doesn't exist.
-    Otherwise streams the file with the right media type.
+    Guarded by require_download_access (#202): the artefact embeds the agent's
+    token, so it is not world-readable. 404 when the agent has no build on disk
+    or the file doesn't exist. Otherwise streams the file with the right media
+    type.
     """
     _validate_segment(agent_id, "agent_id")
     _validate_segment(filename, "filename")
