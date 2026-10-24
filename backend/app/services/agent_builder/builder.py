@@ -181,13 +181,17 @@ def build_agent(
         # 6. Wrap the binary into a self-extracting installer and persist
         #    that too. Installer lives beside the binary; delivery layer
         #    (cloud-init, golden template, hand-run) picks whichever it
-        #    needs by URL.
-        installer_path = ws.output_dir / f"installer_{agent_id}.sh"
+        #    needs by URL. The extension matches the installer's language so
+        #    operators (and Windows) run it correctly: a POSIX /bin/sh script
+        #    (.sh) on Linux/macOS, a PowerShell script (.ps1) on Windows.
+        resolved_target = target_os or compiler.builder_os()
+        installer_ext = "ps1" if resolved_target == "windows" else "sh"
+        installer_path = ws.output_dir / f"installer_{agent_id}.{installer_ext}"
         installer_mod.wrap_as_installer(
             result.binary_path,
             installer_path,
             agent_id=agent_id,
-            target_os=target_os or compiler.builder_os(),
+            target_os=resolved_target,
         )
         installer_url = storage.store_installer(
             agent_id=agent_id, installer=installer_path, root=storage_root

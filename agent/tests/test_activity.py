@@ -263,14 +263,16 @@ def test_pick_next_app_empty():
 
 
 # ---------- run_command still works (real, cross-platform) ----------
+# `exit N` is a builtin of both /bin/sh (Linux/macOS) and cmd.exe (Windows),
+# so these exercise the real subprocess path on every supported OS.
 
 
 def test_run_command_success():
-    assert run_command("true").success is True
+    assert run_command("exit 0").success is True
 
 
 def test_run_command_failure():
-    assert run_command("false").success is False
+    assert run_command("exit 1").success is False
 
 
 # ---------- transition_model integration ----------

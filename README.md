@@ -94,9 +94,12 @@ deployment choice — cloud-init user-data, a golden VM template, or manual copy
 
 ## Scope
 
-The current build targets x86_64 Linux range VMs; the builder is pinned to that
-architecture so agents are produced consistently regardless of the host they are built
-on. Other targets are out of scope for now.
+The agent runs on Linux, macOS and Windows range VMs from one codebase. Because Nuitka
+compiles for the host it runs on and cannot cross-compile, each OS is built by a build
+worker running on that OS, draining its own queue; the backend only enqueues builds for
+OSes a worker exists for (`BUILDABLE_OS`). Linux is the default worker shipped in
+`docker-compose.yml`; see `docs/deployment.md` for standing up macOS and Windows
+workers. Builds are x86_64.
 
 ## Intended use
 

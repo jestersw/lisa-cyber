@@ -1,9 +1,10 @@
-"""Compile the prepared agent source tree into a standalone ELF binary.
+"""Compile the prepared agent source tree into a standalone native binary.
 
 Delegates the actual compilation to Nuitka in --onefile --standalone mode:
-Nuitka produces a self-contained ELF that includes the Python interpreter
-and every module the agent imports. On the target VM there's no need for
-a system Python.
+Nuitka produces a self-contained executable that includes the Python
+interpreter and every module the agent imports. On the target VM there's no
+need for a system Python. The output is an ELF on Linux, a Mach-O on macOS and
+a PE (.exe) on Windows (#221) - Nuitka builds for whatever host it runs on.
 
 We invoke Nuitka as a subprocess (there's no stable public API), stream its
 stdout/stderr through our logger, and return a rich result object so the
@@ -11,9 +12,10 @@ orchestrator can distinguish "compilation failed" (surface stderr to the
 operator) from "we couldn't even start Nuitka" (misconfiguration on the
 builder host itself).
 
-Windows/PE builds are out of scope for now - see docs/agent-config-schema.md
-follow-up work; PyInstaller cross-compilation isn't reliable enough to
-justify the complexity yet.
+Nuitka cannot cross-compile, so each OS target is built on a runner of that OS
+(the build gate in builder.py enforces this). On Windows Nuitka appends a
+`.exe` extension to the output filename, which _output_filename handles so the
+builder finds the artefact regardless of host.
 """
 
 from __future__ import annotations
@@ -39,7 +41,20 @@ def builder_os() -> str:
         return "macos"
     if system == "Linux":
         return "linux"
+    if system == "Windows":
+        return "windows"
     return system.lower()
+
+
+def _output_filename(binary_name: str, host_os: str) -> str:
+    """The filename Nuitka will actually produce for `binary_name` on `host_os`.
+
+    Nuitka appends `.exe` on Windows; on Linux/macOS the name is used verbatim.
+    We pass this exact name to --output-filename and expect it on disk, so the
+    builder finds the artefact no matter which OS it ran on."""
+    if host_os == "windows" and not binary_name.lower().endswith(".exe"):
+        return f"{binary_name}.exe"
+    return binary_name
 
 
 # Give the compiler a generous but finite budget. Nuitka builds a small agent
@@ -99,12 +114,18 @@ def compile_agent(
 
     nuitka = _resolve_nuitka(nuitka_path)
 
+    # Nuitka builds for the host it runs on; resolve the exact output filename
+    # for that OS (adds .exe on Windows) so we both ask Nuitka for it and look
+    # for it on disk under the same name.
+    host_os = builder_os()
+    output_filename = _output_filename(binary_name, host_os)
+
     cmd = [
         nuitka,
         "--standalone",
         "--onefile",
         f"--output-dir={output_dir}",
-        f"--output-filename={binary_name}",
+        f"--output-filename={output_filename}",
         # Assume yes to any Nuitka prompt (e.g. "download ccache?") - the
         # builder must be non-interactive.
         "--assume-yes-for-downloads",
@@ -116,7 +137,7 @@ def compile_agent(
     # On Apple Silicon, the ccache binary Nuitka auto-downloads is x86_64 and
     # breaks the build (it drags in an x86_64 `xcrun`, which can't load the
     # arm64-only libxcrun). Use the native toolchain directly instead.
-    if builder_os() == "macos":
+    if host_os == "macos":
         cmd.insert(-1, "--disable-ccache")
 
     log.info("running: %s", " ".join(cmd))
@@ -134,7 +155,7 @@ def compile_agent(
     except subprocess.TimeoutExpired as exc:
         raise CompilerError(f"nuitka timed out after {timeout_seconds}s") from exc
 
-    binary_path = output_dir / binary_name
+    binary_path = output_dir / output_filename
     # Nuitka may exit 0 but still fail to produce a binary in edge cases
     # (out of disk, permission denied on the last step). Treat that as a
     # failure and surface the logs.
