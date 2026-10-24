@@ -1,0 +1,49 @@
+---
+# macOS install/update. The macOS installer registers a per-user LaunchAgent
+# and already reloads itself on re-run (launchctl unload then load), so unlike
+# Linux there is no separate stop step — running the installer again updates a
+# previous copy cleanly. Runs as the login user (no become; set
+# ansible_become=false for the macOS group in the inventory).
+- name: Set agent paths (macOS)
+  ansible.builtin.set_fact:
+    lisa_agent_path: "{{ ansible_env.HOME }}/Library/Application Support/lisa/agent_{{ lisa_agent_id }}"
+    lisa_agent_installer_tmp: "/tmp/lisa-installer-{{ lisa_agent_id }}.sh"
+
+- name: Check for an existing install (macOS)
+  ansible.builtin.stat:
+    path: "{{ lisa_agent_path }}"
+  register: lisa_agent_existing
+
+- name: Decide whether to (re)install (macOS)
+  ansible.builtin.set_fact:
+    lisa_agent_should_install: "{{ lisa_agent_force_reinstall or not lisa_agent_existing.stat.exists }}"
+
+- name: Report skip when already installed (macOS)
+  ansible.builtin.debug:
+    msg: >-
+      {{ lisa_agent_id }} already installed at {{ lisa_agent_path }};
+      pass -e lisa_agent_force_reinstall=true to update.
+  when: not lisa_agent_should_install
+
+- name: Install/update the agent (macOS)
+  when: lisa_agent_should_install
+  block:
+    - name: Fetch the installer from the backend (macOS)
+      ansible.builtin.get_url:
+        url: "{{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh"
+        dest: "{{ lisa_agent_installer_tmp }}"
+        mode: "0755"
+        force: true
+
+    - name: Run the installer (macOS)
+      ansible.builtin.command:
+        cmd: "{{ lisa_agent_installer_tmp }}"
+      register: lisa_agent_install_result
+      # Non-zero means launchd did not register the agent; let that fail.
+      changed_when: lisa_agent_install_result.rc == 0
+
+  always:
+    - name: Remove the staged installer (macOS)
+      ansible.builtin.file:
+        path: "{{ lisa_agent_installer_tmp }}"
+        state: absent

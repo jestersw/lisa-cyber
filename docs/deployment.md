@@ -119,6 +119,42 @@ provisioning at scale isn't feasible.
 
 ---
 
+## Pattern 4: Ansible orchestration (fleet install/update)
+
+Use this when you have many target hosts reachable over SSH and want to
+install or update agents across all of them in one command, instead of
+hand-running the installer per host (Pattern 3) or baking one agent per
+image (Pattern 2).
+
+A committed Ansible role + playbook lives in `deploy/ansible/`. Each host in
+the inventory carries its own `lisa_agent_id`; the role fetches that agent's
+installer from `GET /api/builds/{id}/installer_{id}.sh` and runs it, for both
+Linux and macOS targets.
+
+```sh
+cd deploy/ansible
+cp inventory.example.ini inventory.ini    # one host line per target, each with its lisa_agent_id
+ansible-playbook deploy-agents.yml -e lisa_agent_backend_url=http://backend:8000
+```
+
+Update a deployed fleet (on Linux this stops the running agent first, since the
+Linux installer has no stop step; macOS reloads its LaunchAgent itself):
+
+```sh
+ansible-playbook deploy-agents.yml \
+    -e lisa_agent_backend_url=http://backend:8000 -e lisa_agent_force_reinstall=true
+```
+
+A plain re-run without the flag skips hosts that already have the agent, so it's
+a safe no-op that only fills in missing hosts. See `deploy/ansible/README.md`
+for the full variable reference. The playbook is syntax-checked and
+`ansible-lint`ed in CI (`.github/workflows/deploy.yml`).
+
+**Note:** like Pattern 3 this needs SSH from the control node to each target,
+but it scales — one inventory, one command for the whole range.
+
+---
+
 ## What lands on the VM
 
 After the installer runs, the VM has exactly one LISA artefact:

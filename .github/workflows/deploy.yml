@@ -1,0 +1,30 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/ansible/**'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    paths:
+      - 'deploy/ansible/**'
+      - '.github/workflows/deploy.yml'
+
+defaults:
+  run:
+    working-directory: deploy/ansible
+
+jobs:
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install ansible-core ansible-lint
+      - name: Syntax check
+        run: ansible-playbook deploy-agents.yml --syntax-check -i inventory.example.ini
+      - name: Ansible lint
+        run: ansible-lint
