@@ -1,0 +1,39 @@
+name: windows-smoke
+
+# End-to-end Windows build smoke test (#221): build the agent through the real
+# pipeline and assert the produced .exe sends a heartbeat. Runs only when the
+# agent or builder changes (a Nuitka build takes a couple of minutes), plus on
+# demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent/**'
+      - 'backend/app/services/agent_builder/**'
+      - 'backend/scripts/smoke_windows_build.py'
+      - '.github/workflows/windows-smoke.yml'
+  pull_request:
+    paths:
+      - 'agent/**'
+      - 'backend/app/services/agent_builder/**'
+      - 'backend/scripts/smoke_windows_build.py'
+      - '.github/workflows/windows-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build + agent deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -e agent nuitka
+      - name: Build agent and assert heartbeat
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: python scripts/smoke_windows_build.py

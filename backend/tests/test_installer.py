@@ -1,3 +1,4 @@
+import base64
 import stat
 import subprocess
 import time
@@ -8,6 +9,7 @@ from app.services.agent_builder.installer import (
     InstallerArtefact,
     InstallerError,
     _macos_header,
+    _windows_header,
     wrap_as_installer,
 )
 
@@ -230,3 +232,54 @@ def test_unknown_target_os_raises(tmp_path):
     out = tmp_path / "installer.sh"
     with pytest.raises(InstallerError, match="no installer template"):
         wrap_as_installer(binary, out, agent_id="USR001", target_os="plan9")
+
+
+# ---------- Windows scheduled-task installer (#221) ----------
+
+
+def _windows_installer(tmp_path, content=b"MZ\x90\x00 fake PE agent\xff\x00"):
+    binary = tmp_path / "agent_USR001.exe"
+    binary.write_bytes(content)
+    out = tmp_path / "installer.ps1"
+    wrap_as_installer(binary, out, agent_id="USR001", target_os="windows")
+    return out, content
+
+
+def test_windows_installer_is_powershell_text(tmp_path):
+    out, _ = _windows_installer(tmp_path)
+    text = out.read_text(encoding="utf-8")
+    # A .ps1, not a binary polyglot: it must be valid UTF-8 text and start with
+    # the PowerShell version guard.
+    assert text.startswith("#Requires -Version 5")
+
+
+def test_windows_installer_embeds_payload_as_base64(tmp_path):
+    out, content = _windows_installer(tmp_path)
+    text = out.read_text(encoding="utf-8")
+    # The agent is carried as base64 inside the script (no trailing raw bytes,
+    # which would break PowerShell's parse), and must decode back exactly.
+    b64 = text.split("@'\n", 1)[1].split("\n'@", 1)[0]
+    assert base64.b64decode(b64) == content
+    assert "FromBase64String" in text
+
+
+def test_windows_installer_registers_logon_scheduled_task(tmp_path):
+    out, _ = _windows_installer(tmp_path)
+    text = out.read_text(encoding="utf-8")
+    assert "schtasks.exe /Create" in text
+    assert "/SC ONLOGON" in text
+    assert "LISA Agent USR001" in text
+    assert "$env:LOCALAPPDATA" in text
+
+
+def test_windows_installer_includes_uninstaller(tmp_path):
+    out, _ = _windows_installer(tmp_path)
+    text = out.read_text(encoding="utf-8")
+    assert "uninstall_" in text
+    assert "schtasks.exe /Delete" in text
+
+
+def test_windows_header_mentions_agent_id(tmp_path):
+    header = _windows_header(agent_id="USR001", payload_b64="QUJD")
+    assert "USR001" in header
+    assert header.startswith("#Requires -Version 5")

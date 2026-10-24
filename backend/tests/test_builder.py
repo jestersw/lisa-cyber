@@ -493,3 +493,33 @@ def test_matching_target_os_builds(tmp_path):
             storage_root=tmp_path / "stg",
         )
     assert result.success is True
+
+
+def test_windows_build_produces_ps1_installer(tmp_path):
+    """A Windows build wraps the agent in a PowerShell (.ps1) installer, not a
+    /bin/sh one, and stores it under the same per-agent dir (#221)."""
+    src = _make_agent_source(tmp_path)
+    with (
+        patch("app.services.agent_builder.builder.compiler.builder_os", return_value="windows"),
+        patch(
+            "app.services.agent_builder.builder.compiler.compile_agent",
+            side_effect=_fake_compile_success,
+        ),
+    ):
+        result = build_agent(
+            agent_id="USR001",
+            deployment_package=_sample_package(),
+            agent_token="tok",
+            backend_url="http://backend:8000",
+            agent_source_root=src,
+            target_os="windows",
+            workspace_root=tmp_path / "ws",
+            storage_root=tmp_path / "stg",
+        )
+
+    assert result.success is True
+    assert result.installer_url is not None
+    assert result.installer_url.endswith(".ps1")
+    installer_file = tmp_path / "stg" / "USR001" / "installer_USR001.ps1"
+    assert installer_file.is_file()
+    assert installer_file.read_text(encoding="utf-8").startswith("#Requires -Version 5")

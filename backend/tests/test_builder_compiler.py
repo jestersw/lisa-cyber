@@ -301,3 +301,37 @@ def test_macos_build_disables_downloaded_ccache(tmp_path):
 def test_linux_build_keeps_ccache(tmp_path):
     cmd = _capture_cmd(tmp_path, "linux")
     assert "--disable-ccache" not in cmd
+
+
+# ---------- Windows PE build (#221) ----------
+
+
+def test_windows_build_outputs_exe_filename(tmp_path):
+    # Nuitka appends .exe on Windows; we must ask for exactly that name so we
+    # also find it on disk afterwards.
+    cmd = _capture_cmd(tmp_path, "windows")
+    assert "--output-filename=agent_x.exe" in cmd
+    # ccache workaround is macOS-only; Windows keeps the default toolchain.
+    assert "--disable-ccache" not in cmd
+
+
+def test_windows_build_finds_exe_binary(tmp_path):
+    src = _make_source_tree(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def fake_run(cmd, **kwargs):
+        # Emulate Nuitka on Windows producing the .exe.
+        (out / "agent_x.exe").write_bytes(b"MZ fake PE")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    with (
+        patch("app.services.agent_builder.compiler.shutil.which", return_value="C:/nuitka.exe"),
+        patch("app.services.agent_builder.compiler.builder_os", return_value="windows"),
+        patch("app.services.agent_builder.compiler.subprocess.run", side_effect=fake_run),
+    ):
+        result = compile_agent(src, out, "agent_x")
+
+    assert result.success is True
+    assert result.binary_path is not None
+    assert result.binary_path.name == "agent_x.exe"

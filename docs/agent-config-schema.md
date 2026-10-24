@@ -148,8 +148,12 @@ per application.
 | `file_copy`       | `target`, `dest`        | copy a sandbox file                              |
 | `file_delete`     | `target`, `delay`       | delete a sandbox file                            |
 
-Network and file commands are OS-neutral (POSIX tools present on Linux and
-macOS). File activity is confined to a per-user sandbox (`~/.lisa/activity`);
+Network and file commands produce the same OS-level events on every supported
+OS; the agent emits POSIX tools (curl / nslookup / nc, touch / mv / cp / rm) on
+Linux and macOS and the PowerShell equivalents (Invoke-WebRequest /
+Resolve-DnsName / Test-NetConnection, New-Item / Move-Item / Copy-Item /
+Remove-Item) on Windows. File activity is confined to a per-user sandbox
+(`~/.lisa/activity` on Linux/macOS, `%USERPROFILE%\.lisa\activity` on Windows);
 `target`/`dest` must be plain filenames — path separators and `..` are rejected,
 so activity can never touch anything outside the sandbox. These exist to produce
 realistic process / network / file **events** for monitoring, per the customer
@@ -159,9 +163,12 @@ note above — not payloads.
 activity runs.
 
 Command specs are OS-neutral: the agent translates them for the host at run
-time — `xdotool` on Linux, `osascript` (System Events) on macOS. Use xdotool-style
-key names (`ctrl+s`, `Return`, `Tab`, `Escape`, arrows); on macOS, modifiers map
-to AppleScript (`ctrl`/`cmd`/`alt`/`shift`) and unmapped non-printable keys are
+time — `xdotool` on Linux, `osascript` (System Events) on macOS, PowerShell
+`SendKeys` on Windows. Use xdotool-style key names (`ctrl+s`, `Return`, `Tab`,
+`Escape`, arrows). On macOS, modifiers map to AppleScript
+(`ctrl`/`cmd`/`alt`/`shift`); on Windows they map to SendKeys prefixes
+(`ctrl`→`^`, `alt`→`%`, `shift`→`+`, and `cmd`/`super`→`^` since Windows has no
+Command key). On every OS, unmapped non-printable keys or unknown modifiers are
 skipped rather than guessed.
 
 ### Per-OS commands
@@ -173,16 +180,24 @@ by OS name. The agent resolves it for the OS it runs on (see `agent_info.os_type
 
 ```json
 "execution": {
-  "open_command":  { "linux": "discord", "macos": "open -a Discord" },
-  "close_command": { "linux": "pkill -f discord", "macos": "osascript -e 'quit app \"Discord\"'" }
+  "open_command":  { "linux": "discord", "macos": "open -a Discord", "windows": "start discord" },
+  "close_command": {
+    "linux": "pkill -f discord",
+    "macos": "osascript -e 'quit app \"Discord\"'",
+    "windows": "taskkill /IM Discord.exe /F"
+  }
 },
 "installation": {
   "install_commands": {
     "linux": ["sudo apt install -y discord"],
-    "macos": ["brew install --cask discord"]
+    "macos": ["brew install --cask discord"],
+    "windows": ["winget install -e --id Discord.Discord"]
   }
 }
 ```
+
+A `windows` key is optional, exactly like `linux`/`macos`: supply it for apps
+that run on Windows ranges, and fall back to `default` or omit it otherwise.
 
 Resolution order for an object: the current OS key, then `default`, else the
 command is treated as absent (a missing open/close command is simply skipped).

@@ -28,11 +28,11 @@ class Settings(BaseSettings):
     ml_models_dir: str = "models"
     default_activity: str = "firefox"
 
-    # OS targets the deployment can actually build. Add "macos" once a macOS
-    # build worker is running (see docs/deployment.md); builds for an OS not
-    # listed here are refused up front so an agent never hangs in `building`
-    # with no worker to pick it up. Nuitka can't cross-compile, so each OS
-    # needs its own worker (#195).
+    # OS targets the deployment can actually build. Add "macos" and/or
+    # "windows" once a build worker for that OS is running (see
+    # docs/deployment.md); builds for an OS not listed here are refused up front
+    # so an agent never hangs in `building` with no worker to pick it up. Nuitka
+    # can't cross-compile, so each OS needs its own worker (#195, #221).
     buildable_os: list[str] = ["linux"]
 
     llm_provider: str = "ollama"

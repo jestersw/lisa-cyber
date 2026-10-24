@@ -3,7 +3,25 @@ import os
 import subprocess
 import sys
 
-from lisa_agent.mutex import AgentMutex, _pid_alive
+import pytest
+
+from lisa_agent import mutex as mutex_mod
+from lisa_agent.mutex import (
+    AgentMutex,
+    PosixAgentMutex,
+    WindowsAgentMutex,
+    _pid_alive,
+    make_mutex,
+)
+
+# The flock + os.kill behaviour below is POSIX-only; on Windows the agent uses
+# WindowsAgentMutex (named Win32 mutex), covered by its own tests further down.
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX mutex (flock/os.kill); Windows uses WindowsAgentMutex"
+)
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32", reason="exercises the real Win32 named mutex"
+)
 
 
 def make(tmp_path, identity="agent_u1"):
@@ -11,6 +29,7 @@ def make(tmp_path, identity="agent_u1"):
     return AgentMutex(identity, mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fallback")
 
 
+@posix_only
 def test_acquire_creates_lock_with_our_pid(tmp_path):
     m = make(tmp_path)
     assert m.acquire() is True
@@ -21,6 +40,7 @@ def test_acquire_creates_lock_with_our_pid(tmp_path):
     m.release()
 
 
+@posix_only
 def test_release_removes_lock(tmp_path):
     m = make(tmp_path)
     m.acquire()
@@ -28,11 +48,13 @@ def test_release_removes_lock(tmp_path):
     assert not m.mutex_path.exists()
 
 
+@posix_only
 def test_release_is_safe_without_acquire(tmp_path):
     # Should not raise even if never acquired.
     make(tmp_path).release()
 
 
+@posix_only
 def test_falls_back_when_primary_unwritable(tmp_path):
     # Primary points at a file (not a dir) so mkdir/probe fails -> fallback used.
     blocker = tmp_path / "blocked"
@@ -44,6 +66,7 @@ def test_falls_back_when_primary_unwritable(tmp_path):
     m.release()
 
 
+@posix_only
 def test_stale_lock_is_reclaimed(tmp_path):
     # Write a lock file owning a PID that is definitely dead, then acquire.
     dead = subprocess.Popen([sys.executable, "-c", "pass"])
@@ -58,6 +81,7 @@ def test_stale_lock_is_reclaimed(tmp_path):
     m.release()
 
 
+@posix_only
 def test_terminates_previous_live_holder(tmp_path):
     # Spawn a real long-lived process, register it as the holder, then acquire.
     victim = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
@@ -80,6 +104,68 @@ def test_terminates_previous_live_holder(tmp_path):
             victim.wait()
 
 
+@posix_only
 def test_pid_alive_basic():
     assert _pid_alive(os.getpid()) is True
     assert _pid_alive(-1) is False
+
+
+# ---------- OS dispatch + Windows mutex (#221) ----------
+
+
+def test_agentmutex_alias_is_posix():
+    # The backwards-compatible name stays the POSIX implementation.
+    assert AgentMutex is PosixAgentMutex
+
+
+def test_make_mutex_picks_posix(monkeypatch, tmp_path):
+    monkeypatch.setattr(mutex_mod, "current_os", lambda: "linux")
+    m = make_mutex("agent_x", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb")
+    assert isinstance(m, PosixAgentMutex)
+
+
+def test_make_mutex_picks_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(mutex_mod, "current_os", lambda: "windows")
+    m = make_mutex("agent_x", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb")
+    assert isinstance(m, WindowsAgentMutex)
+
+
+def test_windows_mutex_sanitizes_kernel_object_name(tmp_path):
+    # Identity goes into a Global\ kernel object name; anything but [A-Za-z0-9._-]
+    # is replaced so the name stays valid, and the namespace prefix is kept.
+    m = WindowsAgentMutex(
+        "tenant/42:agent", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb"
+    )
+    assert m._mutex_name.startswith("Global\\lisa_agent_")
+    body = m._mutex_name[len("Global\\lisa_agent_") :]
+    assert "/" not in body and ":" not in body
+    assert body == "tenant_42_agent"
+
+
+def test_windows_mutex_lock_path_and_dir(tmp_path):
+    run = tmp_path / "run"
+    m = WindowsAgentMutex("agent_w1", mutex_dir=run, fallback_dir=tmp_path / "fb")
+    assert m.mutex_dir == run
+    assert m.mutex_path == run / "agent_w1.lock"
+
+
+def test_windows_mutex_falls_back_when_primary_unwritable(tmp_path):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a dir")  # mkdir/probe on this fails -> fallback
+    fallback = tmp_path / "fb"
+    m = WindowsAgentMutex("agent_w2", mutex_dir=blocker, fallback_dir=fallback)
+    assert m.mutex_dir == fallback
+
+
+@windows_only
+def test_windows_mutex_acquire_writes_lock_and_releases(tmp_path):
+    # Real Win32 named mutex: acquire takes it and records our pid in the lock
+    # file; release drops both. Only runs on a Windows host.
+    m = WindowsAgentMutex("agent_win_rt", mutex_dir=tmp_path / "run", fallback_dir=tmp_path / "fb")
+    assert m.acquire() is True
+    assert m.mutex_path.exists()
+    info = json.loads(m.mutex_path.read_text())
+    assert info["pid"] == os.getpid()
+    assert info["identity"] == "agent_win_rt"
+    m.release()
+    assert not m.mutex_path.exists()

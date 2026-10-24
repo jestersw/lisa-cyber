@@ -263,14 +263,16 @@ def test_pick_next_app_empty():
 
 
 # ---------- run_command still works (real, cross-platform) ----------
+# `exit N` is a builtin of both /bin/sh (Linux/macOS) and cmd.exe (Windows),
+# so these exercise the real subprocess path on every supported OS.
 
 
 def test_run_command_success():
-    assert run_command("true").success is True
+    assert run_command("exit 0").success is True
 
 
 def test_run_command_failure():
-    assert run_command("false").success is False
+    assert run_command("exit 1").success is False
 
 
 # ---------- transition_model integration ----------
@@ -492,3 +494,123 @@ def test_network_file_types_are_os_neutral():
 def test_command_from_dict_parses_new_fields():
     c = Command.from_dict({"type": "ldap_query", "host": "dc.local", "port": 636, "delay": 2})
     assert c.type == "ldap_query" and c.host == "dc.local" and c.port == 636 and c.delay == 2.0
+
+
+# ---------- Windows keystroke injection via SendKeys (#221) ----------
+
+_SENDKEYS_PREFIX = (
+    "powershell -NoProfile -Command "
+    "'Add-Type -AssemblyName System.Windows.Forms; "
+    "[System.Windows.Forms.SendKeys]::SendWait("
+)
+
+
+def test_windows_type_text_uses_sendkeys():
+    out = Command("type_text", text="hi").to_shell("windows")
+    assert out.startswith(_SENDKEYS_PREFIX)
+    assert "SendWait('\\''hi'\\''" in out  # 'hi' as a single-quoted PS literal
+
+
+def test_windows_type_text_escapes_sendkeys_specials():
+    # +, ^, %, (), {} are SendKeys metacharacters and must be braced.
+    out = Command("type_text", text="a+b (c) 50%").to_shell("windows")
+    assert "a{+}b {(}c{)} 50{%}" in out
+
+
+def test_windows_type_text_escapes_single_quote_for_powershell():
+    import shlex
+
+    out = Command("type_text", text="it's").to_shell("windows")
+    # After the outer shell strips its own quoting, PowerShell must receive the
+    # text as a single-quoted literal with the quote doubled: SendWait('it''s').
+    parts = shlex.split(out)
+    ps_arg = parts[parts.index("-Command") + 1]
+    assert "SendWait('it''s')" in ps_arg
+
+
+def test_windows_key_maps_special_key_token():
+    assert "SendWait('\\''{ENTER}'\\''" in Command("key", key="Return").to_shell("windows")
+    assert "{ESC}" in Command("key", key="Escape").to_shell("windows")
+    assert "{TAB}" in Command("key", key="Tab").to_shell("windows")
+
+
+def test_windows_key_combination_maps_modifiers():
+    # ctrl -> ^, shift -> +, alt -> %
+    assert "SendWait('\\''^s'\\''" in Command("key_combination", keys="ctrl+s").to_shell("windows")
+    out = Command("key_combination", keys="ctrl+shift+t").to_shell("windows")
+    assert "^+t" in out
+    assert "%{TAB}" in Command("key_combination", keys="alt+Tab").to_shell("windows")
+
+
+def test_windows_single_printable_char():
+    assert "SendWait('\\''a'\\''" in Command("key", key="a").to_shell("windows")
+
+
+def test_windows_unknown_modifier_or_key_returns_none():
+    assert Command("key_combination", keys="hyper+k").to_shell("windows") is None  # unknown mod
+    assert Command("key", key="F13").to_shell("windows") is None  # unmapped non-printable
+    assert Command("mystery").to_shell("windows") is None
+
+
+# ---------- Windows network + file activity via PowerShell (#221) ----------
+
+
+def test_windows_http_request_uses_invoke_webrequest():
+    out = Command("http_request", url="https://intranet.range.local/wiki").to_shell("windows")
+    assert "Invoke-WebRequest" in out and "-UseBasicParsing" in out
+    assert "intranet.range.local/wiki" in out
+
+
+def test_windows_http_request_rejects_non_http_scheme():
+    assert Command("http_request", url="file:///etc/passwd").to_shell("windows") is None
+    assert Command("http_request", url=None).to_shell("windows") is None
+
+
+def test_windows_dns_lookup_uses_resolve_dnsname():
+    out = Command("dns_lookup", host="mail.range.local").to_shell("windows")
+    assert "Resolve-DnsName" in out and '"mail.range.local"' in out
+
+
+def test_windows_dns_lookup_rejects_bad_host():
+    assert Command("dns_lookup", host="bad;rm -rf /").to_shell("windows") is None
+
+
+def test_windows_ldap_query_uses_test_netconnection():
+    out = Command("ldap_query", host="dc.range.local").to_shell("windows")
+    assert "Test-NetConnection" in out and "-Port 389" in out
+    out2 = Command("ldap_query", host="dc.range.local", port=636).to_shell("windows")
+    assert "-Port 636" in out2
+
+
+def test_windows_file_create_is_sandboxed():
+    out = Command("file_create", target="report.txt").to_shell("windows")
+    assert "New-Item" in out and "report.txt" in out
+    # Confined to the per-user sandbox under %USERPROFILE%\.lisa\activity.
+    assert "$env:USERPROFILE" in out and ".lisa\\activity" in out
+
+
+def test_windows_file_rename_and_copy_and_delete():
+    r = Command("file_rename", target="a.txt", dest="b.txt").to_shell("windows")
+    assert "Move-Item" in r and "a.txt" in r and "b.txt" in r
+    c = Command("file_copy", target="a.txt", dest="b.txt").to_shell("windows")
+    assert "Copy-Item" in c
+    d = Command("file_delete", target="a.txt").to_shell("windows")
+    assert "Remove-Item" in d and "a.txt" in d
+
+
+def test_windows_file_ops_reject_path_traversal():
+    assert Command("file_create", target="../escape").to_shell("windows") is None
+    assert Command("file_create", target="sub/dir").to_shell("windows") is None
+    assert Command("file_rename", target="ok.txt", dest="..\\evil").to_shell("windows") is None
+    assert Command("file_delete", target="..").to_shell("windows") is None
+
+
+def test_windows_network_file_differ_from_posix():
+    # Same activity, genuinely different command on Windows vs POSIX.
+    for cmd in (
+        Command("dns_lookup", host="x.local"),
+        Command("file_create", target="f.txt"),
+        Command("http_request", url="https://x.local"),
+    ):
+        assert cmd.to_shell("windows") != cmd.to_shell("linux")
+        assert cmd.to_shell("windows").startswith("powershell ")
