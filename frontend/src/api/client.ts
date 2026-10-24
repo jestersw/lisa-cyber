@@ -191,6 +191,26 @@ export interface Deployment {
   finished_at: string | null;
 }
 
+export interface DiagnosisFinding {
+  issue: string;
+  evidence?: string | null;
+  severity: "info" | "warning" | "critical";
+}
+
+export interface DiagnosisChange {
+  target: string;
+  change: string;
+}
+
+export interface Diagnosis {
+  agent_id: string;
+  source: "model" | "unavailable";
+  summary: string;
+  findings: DiagnosisFinding[];
+  suggested_changes: DiagnosisChange[];
+  signals: Record<string, unknown>;
+}
+
 export interface NextActivity {
   agent_id: string;
   current: string | null;
@@ -219,6 +239,7 @@ export const endpoints = {
   deployments: (agentId: string) => api.get<Deployment[]>(`/api/agents/${agentId}/deployments`),
   deployAgent: (agentId: string, body: DeployRequest) =>
     api.post<Deployment>(`/api/agents/${agentId}/deploy`, body),
+  diagnoseAgent: (agentId: string) => api.post<Diagnosis>(`/api/agents/${agentId}/diagnose`, {}),
   generateAgent: (body: Record<string, unknown>) =>
     api.post<GenerateAgentResponse>("/api/agents/generate", body),
   generateTemplate: (body: Record<string, unknown>) =>

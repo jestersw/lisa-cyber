@@ -7,6 +7,7 @@ import {
   type AgentStatus,
   type Deployment,
   type DeploymentPackage,
+  type Diagnosis,
   type HeartbeatLog,
   type NextActivity,
 } from "../api/client";
@@ -33,6 +34,9 @@ export function AgentDetail() {
   const [force, setForce] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnoseError, setDiagnoseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!agentId) {
@@ -157,6 +161,18 @@ export function AgentDetail() {
     }
   };
 
+  const runDiagnose = async () => {
+    setDiagnosing(true);
+    setDiagnoseError(null);
+    try {
+      setDiagnosis(await endpoints.diagnoseAgent(agentId));
+    } catch (err) {
+      setDiagnoseError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   return (
     <main className="page">
       <div className="sec-head">Agent</div>
@@ -182,6 +198,56 @@ export function AgentDetail() {
           )}
         </div>
       )}
+
+      <section className="diagnose-panel">
+        <div className="diagnose-head">
+          <h2 className="section-title">Behaviour diagnosis</h2>
+          <button className="btn" onClick={runDiagnose} disabled={diagnosing}>
+            {diagnosing ? "Analysing…" : "Diagnose"}
+          </button>
+        </div>
+        <p className="field-hint">
+          Collects this agent's heartbeats, activity events and build status and asks the LLM
+          why it may be misbehaving, with suggested config fixes.
+        </p>
+        {diagnoseError && <div className="notice error">{diagnoseError}</div>}
+        {diagnosis && (
+          <div className="diagnose-result">
+            <p className="diagnose-summary">
+              {diagnosis.summary}
+              <span className="diagnose-source">
+                {diagnosis.source === "model" ? "LLM" : "no LLM — signals only"}
+              </span>
+            </p>
+            {diagnosis.findings.length > 0 && (
+              <ul className="diagnose-findings">
+                {diagnosis.findings.map((f, i) => (
+                  <li key={i} className={`finding ${f.severity}`}>
+                    <span className="finding-sev">{f.severity}</span>
+                    {f.issue}
+                    {f.evidence ? <span className="finding-ev"> — {f.evidence}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {diagnosis.suggested_changes.length > 0 && (
+              <>
+                <h3 className="diagnose-subtitle">Suggested changes</h3>
+                <ul className="diagnose-changes">
+                  {diagnosis.suggested_changes.map((c, i) => (
+                    <li key={i}>
+                      <strong>{c.target}</strong>: {c.change}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {diagnosis.findings.length === 0 && diagnosis.suggested_changes.length === 0 && (
+              <p className="empty">No issues detected.</p>
+            )}
+          </div>
+        )}
+      </section>
 
       {agent?.installer_url && (
         <section className="deploy-panel">

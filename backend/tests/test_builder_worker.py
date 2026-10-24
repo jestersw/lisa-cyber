@@ -81,6 +81,7 @@ class FakeAgent:
         self.agent_token = None
         self.binary_url = None
         self.installer_url = None
+        self.version_info = None
 
 
 class FakeSession:

@@ -10,6 +10,7 @@ from app.api.endpoints import (
     auth,
     builds,
     deploy,
+    diagnose,
     events,
     generate,
     heartbeat,
@@ -58,6 +59,7 @@ app.include_router(
     generate.router, prefix="/api", tags=["Template generation"], dependencies=_operator
 )
 app.include_router(deploy.router, prefix="/api", tags=["Deployment"], dependencies=_operator)
+app.include_router(diagnose.router, prefix="/api", tags=["Diagnostics"], dependencies=_operator)
 
 # Mixed routers (agent token + operator): guarded per-route inside the module.
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
