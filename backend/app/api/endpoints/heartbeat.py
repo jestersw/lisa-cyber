@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -67,7 +67,11 @@ def receive_heartbeat(hb: AgentHeartbeatRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/agents/{agent_id}/heartbeats", dependencies=[Depends(require_operator)])
-def get_agent_heartbeats(agent_id: str, limit: int = 10, db: Session = Depends(get_db)):
+def get_agent_heartbeats(
+    agent_id: str,
+    limit: int = Query(default=10, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -87,7 +91,10 @@ def get_agent_heartbeats(agent_id: str, limit: int = 10, db: Session = Depends(g
 
 
 @router.get("/agents-active", dependencies=[Depends(require_operator)])
-def get_active_agents(threshold_minutes: int = 30, db: Session = Depends(get_db)):
+def get_active_agents(
+    threshold_minutes: int = Query(default=30, ge=1, le=10080),
+    db: Session = Depends(get_db),
+):
     cutoff = _utcnow() - timedelta(minutes=threshold_minutes)
     agents = db.query(Agent).filter(Agent.last_seen >= cutoff, Agent.status == "active").all()
     return {

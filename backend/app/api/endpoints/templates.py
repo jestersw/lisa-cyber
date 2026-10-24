@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -39,10 +39,10 @@ def create_behavior_template(t: BehaviorTemplateCreate, db: Session = Depends(ge
 
 @router.get("/behavior-templates", response_model=list[BehaviorTemplateResponse])
 def list_behavior_templates(
-    role_id: int | None = None,
-    os_type: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    role_id: int | None = Query(default=None, ge=1),
+    os_type: str | None = Query(default=None, max_length=20),
+    skip: int = Query(default=0, ge=0, le=1_000_000),
+    limit: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
     query = db.query(BehaviorTemplate).filter(BehaviorTemplate.is_active.is_(True))

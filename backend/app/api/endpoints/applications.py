@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -38,10 +38,10 @@ def create_application_template(t: ApplicationTemplateCreate, db: Session = Depe
 
 @router.get("/application-templates", response_model=list[ApplicationTemplateResponse])
 def list_application_templates(
-    category: str | None = None,
-    os_type: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    category: str | None = Query(default=None, max_length=100),
+    os_type: str | None = Query(default=None, max_length=20),
+    skip: int = Query(default=0, ge=0, le=1_000_000),
+    limit: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
     query = db.query(ApplicationTemplate).filter(ApplicationTemplate.is_active.is_(True))

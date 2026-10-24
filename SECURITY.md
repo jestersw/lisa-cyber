@@ -67,6 +67,10 @@ Tracks the state of each hardening item. This is a living list.
 - Secret scanning (`gitleaks`) in pre-commit and CI.
 - All secrets moved to environment variables; none hardcoded.
 - `.env.example` documenting required configuration.
+- Input validation on backend endpoints (#53). Request bodies are Pydantic
+  schemas (with a length cap on string fields), list/pagination/threshold query
+  parameters are range-bounded, and all DB access goes through the ORM (no raw
+  SQL), so malformed, oversized, or out-of-range input is rejected with 422.
 
 **In progress**
 - Agent → backend authentication. The agent already sends a bearer token; the
@@ -78,8 +82,9 @@ Tracks the state of each hardening item. This is a living list.
   the team still needs to decide how operators log in (e.g. username/password,
   session vs. token). Until then the panel must not be exposed outside the
   isolated environment.
-- Input validation on all backend endpoints: strict Pydantic schemas for every
-  request body, and parameterised queries / ORM usage to prevent SQL injection.
+- Rejecting unknown fields on request bodies (Pydantic `extra="forbid"`) — a
+  stricter follow-up to the input validation above, pending a frontend pass so
+  it doesn't break a panel that sends extra keys.
 - Rate limiting on public endpoints (e.g. heartbeat) to prevent flooding.
 - TLS for agent ↔ backend traffic so tokens can't be intercepted.
 - Authorization (not just authentication): decide whether operators are

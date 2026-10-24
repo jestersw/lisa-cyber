@@ -4,6 +4,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Cap every string field on request bodies so a client can't send a multi-megabyte
+# value (#53). Generous enough never to hit a legitimate name/description/config
+# string; dict/JSON fields are size-bounded by the DB columns they land in.
+MAX_STR_LEN = 20_000
+
+
+class StrictInput(BaseModel):
+    """Base for request-body schemas: bounds every string field's length."""
+
+    model_config = ConfigDict(str_max_length=MAX_STR_LEN)
+
 
 class OSType(StrEnum):
     LINUX = "linux"
@@ -11,7 +22,7 @@ class OSType(StrEnum):
     WINDOWS = "windows"
 
 
-class RoleBase(BaseModel):
+class RoleBase(StrictInput):
     name: str
     description: str
     category: str
@@ -21,7 +32,7 @@ class RoleCreate(RoleBase):
     pass
 
 
-class RoleUpdate(BaseModel):
+class RoleUpdate(StrictInput):
     name: str | None = None
     description: str | None = None
     category: str | None = None
@@ -35,7 +46,7 @@ class RoleResponse(RoleBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class BehaviorTemplateBase(BaseModel):
+class BehaviorTemplateBase(StrictInput):
     name: str
     description: str | None = None
     role_id: int
@@ -48,7 +59,7 @@ class BehaviorTemplateCreate(BehaviorTemplateBase):
     pass
 
 
-class BehaviorTemplateUpdate(BaseModel):
+class BehaviorTemplateUpdate(StrictInput):
     name: str | None = None
     description: str | None = None
     role_id: int | None = None
@@ -66,7 +77,7 @@ class BehaviorTemplateResponse(BehaviorTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ApplicationTemplateBase(BaseModel):
+class ApplicationTemplateBase(StrictInput):
     name: str
     display_name: str | None = None
     category: str | None = None
@@ -81,7 +92,7 @@ class ApplicationTemplateCreate(ApplicationTemplateBase):
     pass
 
 
-class ApplicationTemplateUpdate(BaseModel):
+class ApplicationTemplateUpdate(StrictInput):
     name: str | None = None
     display_name: str | None = None
     category: str | None = None
@@ -101,7 +112,7 @@ class ApplicationTemplateResponse(ApplicationTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AgentConfig(BaseModel):
+class AgentConfig(StrictInput):
     name: str
     role: str | None = None
     role_id: int | None = None
@@ -149,7 +160,7 @@ class AgentConfigResponse(BaseModel):
     version: str
 
 
-class AgentHeartbeatRequest(BaseModel):
+class AgentHeartbeatRequest(StrictInput):
     agent_id: str
     status: str = "active"
     timestamp: datetime | None = None
@@ -176,7 +187,7 @@ class ActivityLog(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ActivityEventCreate(BaseModel):
+class ActivityEventCreate(StrictInput):
     app: str
     activity_type: str
     timestamp: datetime
@@ -202,7 +213,7 @@ class GeneratedTemplate(BaseModel):
     activities: list[str] = Field(default_factory=list)
 
 
-class TemplateGenerationRequest(BaseModel):
+class TemplateGenerationRequest(StrictInput):
     description: str
     os_type: OSType = OSType.LINUX
     name: str | None = None
@@ -244,7 +255,7 @@ class HeartbeatSpec(BaseModel):
     interval_minutes: int = 30
 
 
-class AgentInfo(BaseModel):
+class AgentInfo(StrictInput):
     agent_id: str
     name: str
     role: str
@@ -336,7 +347,7 @@ class ApplicationPlugin(BaseModel):
     settings: PluginSettings = Field(default_factory=PluginSettings)
 
 
-class PluginGenerationRequest(BaseModel):
+class PluginGenerationRequest(StrictInput):
     name: str
     os_type: OSType = OSType.LINUX
     description: str | None = None
