@@ -349,6 +349,42 @@ class PluginGenerationResponse(BaseModel):
     source: str
 
 
+class DeployTarget(BaseModel):
+    # Hostname or IP ansible connects to over SSH. Validated to a conservative
+    # charset so it can be written into an inventory file without surprises.
+    host: str = Field(min_length=1, max_length=253, pattern=r"^[A-Za-z0-9._-]+$")
+    # Optional SSH login for this host (ansible_user). Same conservative charset.
+    ssh_user: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    # Whether this host needs privilege escalation (Linux installs to /opt/lisa
+    # and so needs become; macOS installs per-user and does not). Defaults are
+    # filled in per-OS by the endpoint when the request leaves it unset.
+    become: bool | None = None
+
+
+class DeployRequest(BaseModel):
+    targets: list[DeployTarget] = Field(min_length=1, max_length=500)
+    # Where targets fetch the installer from; defaults to the backend's
+    # public_base_url when omitted.
+    backend_url: str | None = Field(default=None, max_length=500)
+    # Re-deploy even if the agent already looks installed (stops the running
+    # Linux agent first; macOS reloads its own LaunchAgent).
+    force: bool = False
+
+
+class DeploymentResponse(BaseModel):
+    id: int
+    agent_id: str
+    backend: str
+    status: str
+    targets: dict | None = None
+    returncode: int | None = None
+    output: str | None = None
+    error: str | None = None
+    created_at: datetime | None = None
+    finished_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 

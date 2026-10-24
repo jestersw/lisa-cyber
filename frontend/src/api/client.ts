@@ -167,6 +167,30 @@ export interface DeploymentPackage {
   application_plugins: Record<string, unknown>;
 }
 
+export interface DeployTarget {
+  host: string;
+  ssh_user?: string | null;
+  become?: boolean | null;
+}
+
+export interface DeployRequest {
+  targets: DeployTarget[];
+  backend_url?: string | null;
+  force?: boolean;
+}
+
+export interface Deployment {
+  id: number;
+  agent_id: string;
+  backend: string;
+  status: string;
+  returncode: number | null;
+  output: string | null;
+  error: string | null;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
 export interface NextActivity {
   agent_id: string;
   current: string | null;
@@ -192,6 +216,9 @@ export const endpoints = {
   agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),
   agentConfig: (agentId: string) => api.get<DeploymentPackage>(`/api/agents/${agentId}/config`),
   nextActivity: (agentId: string) => api.get<NextActivity>(`/api/agents/${agentId}/next-activity`),
+  deployments: (agentId: string) => api.get<Deployment[]>(`/api/agents/${agentId}/deployments`),
+  deployAgent: (agentId: string, body: DeployRequest) =>
+    api.post<Deployment>(`/api/agents/${agentId}/deploy`, body),
   generateAgent: (body: Record<string, unknown>) =>
     api.post<GenerateAgentResponse>("/api/agents/generate", body),
   generateTemplate: (body: Record<string, unknown>) =>

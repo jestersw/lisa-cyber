@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import {
   endpoints,
   BASE_URL,
+  ApiError,
   type AgentStatus,
+  type Deployment,
   type DeploymentPackage,
   type HeartbeatLog,
   type NextActivity,
@@ -25,6 +27,12 @@ export function AgentDetail() {
   const [pkg, setPkg] = useState<DeploymentPackage | null>(null);
   const [prediction, setPrediction] = useState<NextActivity | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [hosts, setHosts] = useState("");
+  const [sshUser, setSshUser] = useState("");
+  const [force, setForce] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!agentId) {
@@ -83,6 +91,18 @@ export function AgentDetail() {
             setPrediction(null);
           }
         });
+      endpoints
+        .deployments(agentId)
+        .then((value) => {
+          if (active) {
+            setDeployments(value);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setDeployments([]);
+          }
+        });
     };
 
     load();
@@ -110,6 +130,33 @@ export function AgentDetail() {
   const agent = status?.agent;
   const config = pkg?.agent_config;
 
+  const submitDeploy = async () => {
+    const parsed = hosts
+      .split(/[\s,]+/)
+      .map((h) => h.trim())
+      .filter(Boolean);
+    if (parsed.length === 0) {
+      setDeployError("Enter at least one target host.");
+      return;
+    }
+    setDeploying(true);
+    setDeployError(null);
+    try {
+      const user = sshUser.trim();
+      await endpoints.deployAgent(agentId, {
+        targets: parsed.map((host) => ({ host, ssh_user: user || null })),
+        force,
+      });
+      setHosts("");
+      const latest = await endpoints.deployments(agentId);
+      setDeployments(latest);
+    } catch (err) {
+      setDeployError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setDeploying(false);
+    }
+  };
+
   return (
     <main className="page">
       <div className="sec-head">Agent</div>
@@ -134,6 +181,76 @@ export function AgentDetail() {
             </a>
           )}
         </div>
+      )}
+
+      {agent?.installer_url && (
+        <section className="deploy-panel">
+          <h2 className="section-title">Deploy to hosts</h2>
+          <p className="field-hint">
+            Push this agent onto target hosts over SSH via Ansible. One host per line (or
+            comma-separated); each gets this agent installed and kept running.
+          </p>
+          <div className="field">
+            <label htmlFor="deploy-hosts">Target hosts</label>
+            <textarea
+              id="deploy-hosts"
+              rows={3}
+              placeholder={"web01.corp.local\ndb01.corp.local"}
+              value={hosts}
+              onChange={(e) => setHosts(e.target.value)}
+            />
+          </div>
+          <div className="deploy-controls">
+            <div className="field">
+              <label htmlFor="deploy-user">SSH user (optional)</label>
+              <input
+                id="deploy-user"
+                placeholder="operator"
+                value={sshUser}
+                onChange={(e) => setSshUser(e.target.value)}
+              />
+            </div>
+            <label className="deploy-check">
+              <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+              Force reinstall / update
+            </label>
+            <button className="btn primary" onClick={submitDeploy} disabled={deploying}>
+              {deploying ? "Deploying…" : "Deploy"}
+            </button>
+          </div>
+          {deployError && <div className="notice error">{deployError}</div>}
+
+          {deployments.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Status</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deployments.map((d) => (
+                  <tr key={d.id}>
+                    <td>{formatTime(d.created_at)}</td>
+                    <td>
+                      <span className={`status ${d.status}`}>{d.status}</span>
+                    </td>
+                    <td className="deploy-result">
+                      {d.status === "unavailable"
+                        ? (d.error ?? "ansible unavailable")
+                        : d.status === "failed"
+                          ? (d.error ?? `exit ${d.returncode ?? "?"}`)
+                          : d.status === "succeeded"
+                            ? "ok"
+                            : "…"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
       )}
 
       <div className="stat-grid">
