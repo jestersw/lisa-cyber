@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
-import { endpoints, type ApplicationTemplate } from "../api/client";
+import { endpoints, type ApplicationTemplate, type Meta } from "../api/client";
 
 const ROLES = ["developer", "admin", "user"];
 const OS_OPTIONS = ["linux", "macos", "windows"];
+
+const BUILD_STATUS_LABEL: Record<string, string> = {
+  queued: "build queued",
+  unsupported_os: "configured, but no build worker for this OS — build not queued",
+  queue_unavailable: "configured, but the build queue is unavailable",
+};
 const WEEKDAYS = [
   { value: 1, label: "Mon" },
   { value: 2, label: "Tue" },
@@ -38,8 +44,9 @@ export function AgentCreate() {
   const [heartbeatMinutes, setHeartbeatMinutes] = useState(30);
 
   const [available, setAvailable] = useState<ApplicationTemplate[]>([]);
+  const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ agentId: string; buildStatus?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -47,7 +54,14 @@ export function AgentCreate() {
       .applicationTemplates()
       .then(setAvailable)
       .catch(() => setAvailable([]));
+    endpoints
+      .meta()
+      .then(setMeta)
+      .catch(() => setMeta(null));
   }, []);
+
+  const buildable = meta?.buildable_os ?? ["linux"];
+  const osBuildable = buildable.includes(osType);
 
   const suggestions = available.filter((app) => app.os_type === osType);
 
@@ -117,7 +131,7 @@ export function AgentCreate() {
     setSubmitting(true);
     try {
       const response = await endpoints.generateAgent(payload);
-      setResult(response.agent_id);
+      setResult({ agentId: response.agent_id, buildStatus: response.config?.build_status });
       setName("");
       setApplications([]);
     } catch (err) {
@@ -164,9 +178,16 @@ export function AgentCreate() {
             {OS_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
+                {buildable.includes(option) ? "" : " — no build worker"}
               </option>
             ))}
           </select>
+          {!osBuildable && (
+            <span className="field-hint warn">
+              No build worker is running for {osType}. The agent will be configured, but its binary
+              won't be built until a {osType} worker is online.
+            </span>
+          )}
         </div>
 
         <div className="field">
@@ -366,7 +387,14 @@ export function AgentCreate() {
       </div>
 
       {error && <div className="notice error">{error}</div>}
-      {result && <div className="notice success">Agent created: {result}</div>}
+      {result && (
+        <div className={`notice ${result.buildStatus === "queued" ? "success" : "warn"}`}>
+          Agent created: {result.agentId}
+          {result.buildStatus && (
+            <> — {BUILD_STATUS_LABEL[result.buildStatus] ?? result.buildStatus}</>
+          )}
+        </div>
+      )}
     </main>
   );
 }

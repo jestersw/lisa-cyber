@@ -137,8 +137,14 @@ export interface Agent {
 export interface GenerateAgentResponse {
   agent_id: string;
   message: string;
+  config: { build_status?: string; [key: string]: unknown };
   config_url: string;
   status_url: string;
+}
+
+export interface Meta {
+  os_types: string[];
+  buildable_os: string[];
 }
 
 
@@ -279,6 +285,7 @@ export const endpoints = {
     ),
   mlStatus: () => api.get<MlStatus>("/api/ml/status"),
   mlReload: () => api.post<{ reloaded: boolean }>("/api/ml/reload", {}),
+  meta: () => api.get<Meta>("/api/meta"),
   agents: () => api.get<Agent[]>("/api/agents"),
   agentStatus: (agentId: string) => api.get<AgentStatus>(`/api/agents/${agentId}/status`),
   agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),

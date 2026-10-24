@@ -10,6 +10,7 @@ import { BehaviorTemplates } from "./pages/BehaviorTemplates";
 import { Dashboard } from "./pages/Dashboard";
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
+import { MlStatus } from "./pages/MlStatus";
 import { Roles } from "./pages/Roles";
 
 export function App() {
@@ -38,6 +39,7 @@ export function App() {
           <Route path="/roles" element={<Roles />} />
           <Route path="/behavior-templates" element={<BehaviorTemplates />} />
           <Route path="/application-plugins" element={<ApplicationPlugins />} />
+          <Route path="/model" element={<MlStatus />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>

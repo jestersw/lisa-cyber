@@ -777,3 +777,21 @@
   color: var(--light);
   white-space: pre;
 }
+
+/* Warn variants for build-availability hints */
+.notice.warn {
+  border-color: rgba(224, 168, 46, 0.4);
+  background: rgba(224, 168, 46, 0.08);
+  color: #e0a82e;
+}
+
+.field-hint.warn {
+  color: #e0a82e;
+}
+
+.stat-value.mono,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  word-break: break-all;
+}

@@ -8,6 +8,7 @@ const links = [
   { to: "/roles", label: "Roles" },
   { to: "/behavior-templates", label: "Templates" },
   { to: "/application-plugins", label: "Plugins" },
+  { to: "/model", label: "Model" },
 ];
 
 export function Layout() {
