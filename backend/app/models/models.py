@@ -113,6 +113,30 @@ class AgentActivity(Base):
     agent: Mapped[Agent | None] = relationship(back_populates="activities")
 
 
+class Deployment(Base):
+    """One attempt to push/update an agent onto a set of target hosts via an
+    orchestration backend (Ansible today, #212). The operator triggers it from
+    the panel; the runner updates status + output as the playbook runs."""
+
+    __tablename__ = "deployments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    # The agent being deployed (its string USR id, matching the API path and
+    # the builds endpoint). Not a hard FK so a deployment record survives even
+    # if the agent row is later removed.
+    agent_id: Mapped[str] = mapped_column(String(50), index=True)
+    backend: Mapped[str] = mapped_column(String(20), default="ansible")
+    # pending -> running -> succeeded | failed | unavailable
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    # The request payload (targets + options), kept for audit / re-run.
+    targets: Mapped[dict | None] = mapped_column(JSON, default=None)
+    returncode: Mapped[int | None] = mapped_column(default=None)
+    output: Mapped[str | None] = mapped_column(Text, default=None)
+    error: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, default=None)
+
+
 class ActivityEvent(Base):
     __tablename__ = "activity_events"
 

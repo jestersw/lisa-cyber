@@ -153,6 +153,36 @@ for the full variable reference. The playbook is syntax-checked and
 **Note:** like Pattern 3 this needs SSH from the control node to each target,
 but it scales — one inventory, one command for the whole range.
 
+### From the panel
+
+The same orchestration can be triggered from the operator panel for a built
+agent, so you don't have to drop to a shell. On an agent's detail page (once it
+has a build) a **Deploy to hosts** panel takes a list of target hosts (and an
+optional SSH user); the backend renders an inventory, runs the committed
+playbook, and reflects each deployment's status (`pending` → `running` →
+`succeeded` / `failed`) back in a table below the form. "Force reinstall"
+maps to `lisa_agent_force_reinstall`.
+
+Under the hood:
+
+- `POST /api/agents/{id}/deploy` with `{ "targets": [{ "host": "...", "ssh_user": "..." }], "force": false }`
+  creates a deployment and kicks off the run in the background.
+- `GET /api/agents/{id}/deployments` lists recent deployments; `GET /api/deployments/{id}`
+  is one deployment with its return code and output tail.
+
+All target hosts receive the agent named in the path (one agent → many hosts).
+Both routes require an operator token.
+
+**Backend requirements.** Panel deployment runs `ansible-playbook` on the
+backend host, so that host needs `ansible-playbook` on `PATH`, the committed
+`deploy/ansible/` tree (set `LISA_ANSIBLE_DIR` if it isn't at the repo's default
+location), and SSH reachability to the targets. The stock backend image stays
+lean and ships **without** ansible; where it isn't installed, a deployment is
+recorded as `unavailable` with a message pointing back to the committed
+playbook, rather than failing silently. Run the backend on a host (or sidecar)
+with ansible installed to enable panel deployment, or keep using the committed
+playbook directly (above).
+
 ---
 
 ## What lands on the VM
