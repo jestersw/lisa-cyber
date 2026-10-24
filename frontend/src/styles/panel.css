@@ -721,3 +721,59 @@
   font-size: 0.88rem;
   color: var(--light);
 }
+
+/* Catalog pages: compact row actions, LLM draft preview */
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn.small {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.btn.danger {
+  border-color: rgba(229, 83, 75, 0.5);
+  color: #e5534b;
+}
+
+.btn.danger:hover {
+  background: rgba(229, 83, 75, 0.12);
+}
+
+.draft {
+  margin: 10px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2, rgba(255, 255, 255, 0.02));
+}
+
+.draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.draft-head .section-title {
+  margin: 0;
+}
+
+.json-preview {
+  margin: 12px 0 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.25);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--light);
+  white-space: pre;
+}

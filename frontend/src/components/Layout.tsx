@@ -5,6 +5,9 @@ const links = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/agents", label: "Agents" },
   { to: "/agents/create", label: "New agent" },
+  { to: "/roles", label: "Roles" },
+  { to: "/behavior-templates", label: "Templates" },
+  { to: "/application-plugins", label: "Plugins" },
 ];
 
 export function Layout() {

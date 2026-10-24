@@ -5,9 +5,12 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgentCreate } from "./pages/AgentCreate";
 import { AgentDetail } from "./pages/AgentDetail";
 import { AgentList } from "./pages/AgentList";
+import { ApplicationPlugins } from "./pages/ApplicationPlugins";
+import { BehaviorTemplates } from "./pages/BehaviorTemplates";
 import { Dashboard } from "./pages/Dashboard";
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
+import { Roles } from "./pages/Roles";
 
 export function App() {
   const navigate = useNavigate();
@@ -32,6 +35,9 @@ export function App() {
           <Route path="/agents" element={<AgentList />} />
           <Route path="/agents/create" element={<AgentCreate />} />
           <Route path="/agents/:agentId" element={<AgentDetail />} />
+          <Route path="/roles" element={<Roles />} />
+          <Route path="/behavior-templates" element={<BehaviorTemplates />} />
+          <Route path="/application-plugins" element={<ApplicationPlugins />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>
