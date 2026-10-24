@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.models import Agent, AgentActivity
 from app.ratelimit import rate_limit
 from app.schemas import AgentHeartbeatRequest, AgentHeartbeatResponse
-from app.security import agent_token_matches, require_operator
+from app.security import agent_is_secured, agent_token_matches, require_operator
 
 router = APIRouter()
 
@@ -39,8 +39,10 @@ def receive_heartbeat(
         raise HTTPException(status_code=404, detail="Agent not found")
     # Per-agent token check (#201). The agent id is in the body, not the path,
     # so this can't use the require_agent dependency; validate here instead.
-    # Agents with no token yet (dev/tests) stay open, like the other guards.
-    if agent.agent_token is not None and not agent_token_matches(authorization, agent.agent_token):
+    # A built agent (secured) must present its real token; a never-built dev/test
+    # agent stays open. A built-but-not-enrolled agent has no real token yet and
+    # is rejected until it enrolls.
+    if agent_is_secured(agent) and not agent_token_matches(authorization, agent.agent_token):
         raise HTTPException(status_code=401, detail="Invalid or missing agent token")
 
     agent.status = hb.status

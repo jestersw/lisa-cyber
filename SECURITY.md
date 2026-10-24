@@ -77,10 +77,11 @@ Tracks the state of each hardening item. This is a living list.
 - Per-agent backend authentication (#201). Each agent has its own token (hashed
   at rest), and every agent-facing request is verified against that agent's
   token; a missing or wrong token is rejected (dev/unbuilt agents stay open).
-
-**In progress**
-- Issuing the per-agent token at install time instead of baking it into the
-  built binary (#201 follow-up), so the token never sits in the stored artefact.
+- Install-time token issuance (#201 part B). The build bakes only a one-time
+  enrollment token; on first run the agent exchanges it (POST
+  /api/agents/{id}/enroll) for its real token, stores that locally, and uses it
+  thereafter. The real token never sits in the downloadable artefact, and the
+  enrollment token is single-use.
 
 **Planned**
 - Operator authentication for the web panel. *Open question — not yet designed:*

@@ -100,6 +100,14 @@ clone to run a different agent config, you need one image per agent,
 which doesn't scale. Use this for stable long-lived infrastructure, not
 for per-exercise agents.
 
+**Enrollment and golden images (#201).** On first run the agent exchanges its
+baked one-time enrollment token for its real token and stores it at
+`~/.lisa/agent_token` (`%LOCALAPPDATA%\lisa\agent_token` on Windows). Bake the
+image **before** the agent has run, so the token file is absent and each clone
+enrolls itself on first boot. If you snapshot an image *after* the agent has
+enrolled, every clone would carry the same token file — delete it before
+sealing the image so clones re-enroll individually.
+
 ---
 
 ## Pattern 3: manual / SSH (operator drops the file)

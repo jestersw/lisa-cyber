@@ -149,6 +149,11 @@ class AgentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AgentEnrollResponse(BaseModel):
+    agent_id: str
+    token: str  # the agent's real per-agent token, returned once at enrollment
+
+
 class AgentConfigResponse(BaseModel):
     agent_id: str
     name: str

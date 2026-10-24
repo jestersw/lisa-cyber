@@ -1,7 +1,8 @@
 import logging
+import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -16,15 +17,22 @@ from app.models.models import (
     Role,
 )
 from app.models_store import get_store, restrict_model
-from app.ratelimit import get_redis
+from app.ratelimit import get_redis, rate_limit
 from app.schemas import (
     AgentConfig,
     AgentConfigSpec,
+    AgentEnrollResponse,
     AgentGenerateResponse,
     AgentResponse,
     DeploymentPackage,
 )
-from app.security import create_download_token, require_agent, require_operator
+from app.security import (
+    agent_token_matches,
+    create_download_token,
+    hash_agent_token,
+    require_agent,
+    require_operator,
+)
 from app.services.agent_builder.worker import enqueue_build
 
 log = logging.getLogger("lisa.agents")
@@ -255,3 +263,44 @@ def get_agent_config(agent: Agent = Depends(require_agent), db: Session = Depend
         agent_config=AgentConfigSpec(**agent_config),
         application_plugins=plugins,
     )
+
+
+@router.post(
+    "/agents/{agent_id}/enroll",
+    response_model=AgentEnrollResponse,
+    dependencies=[Depends(rate_limit())],
+)
+def enroll_agent(
+    agent_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Exchange a one-time enrollment token for the agent's real token (#201 B).
+
+    The build bakes a short, single-use enrollment token into the binary instead
+    of a long-lived credential; on first run the agent calls this endpoint with
+    it (``Authorization: Bearer <enrollment token>``) and receives its real
+    token, which it stores locally and uses thereafter. The real token never sits
+    in the downloadable artefact.
+
+    Single-use: once enrolled, the enrollment token is cleared and a second call
+    is rejected (409) — rotating the token means rebuilding, which mints a fresh
+    enrollment token.
+    """
+    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.enrolled or agent.enrollment_token_hash is None:
+        # Already enrolled, or never had a pending enrollment (e.g. a dev agent
+        # that was never built). Either way there is nothing to exchange.
+        raise HTTPException(status_code=409, detail="Agent is not awaiting enrollment")
+    if not agent_token_matches(authorization, agent.enrollment_token_hash):
+        raise HTTPException(status_code=401, detail="Invalid or missing enrollment token")
+
+    real_token = secrets.token_urlsafe(32)
+    agent.agent_token = hash_agent_token(real_token)
+    agent.enrollment_token_hash = None  # single-use: consume it
+    agent.enrolled = True
+    db.commit()
+    log.info("agent %s enrolled", agent_id)
+    return AgentEnrollResponse(agent_id=agent_id, token=real_token)

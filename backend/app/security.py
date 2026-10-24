@@ -61,6 +61,16 @@ def agent_token_matches(authorization: str | None, stored_hash: str | None) -> b
     return secrets.compare_digest(hash_agent_token(presented), stored_hash)
 
 
+def agent_is_secured(agent: Agent) -> bool:
+    """True once an agent has any credential, i.e. it has been built (#201).
+
+    A built agent carries either a pending enrollment token (before install) or
+    a real token (after it enrolls); either way its endpoints are enforced. A
+    dev/test agent that was never built has neither and stays open.
+    """
+    return agent.agent_token is not None or agent.enrollment_token_hash is not None
+
+
 def require_agent(
     agent_id: str,
     authorization: str | None = Header(default=None),
@@ -69,13 +79,15 @@ def require_agent(
     """Authenticate an agent-facing request against that agent's own token (#201).
 
     Returns the Agent so handlers can reuse it without a second lookup. 404 for
-    an unknown agent; 401 when the agent has a token and the Bearer doesn't
-    match; open (no token required) when the agent has no token yet — dev/tests.
+    an unknown agent; 401 for a secured agent whose Bearer doesn't match its real
+    token (a built-but-not-yet-enrolled agent has no real token, so it must
+    enroll first and is rejected here); open when the agent was never built —
+    dev/tests.
     """
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
-    if agent.agent_token is not None and not agent_token_matches(authorization, agent.agent_token):
+    if agent_is_secured(agent) and not agent_token_matches(authorization, agent.agent_token):
         raise HTTPException(status_code=401, detail="Invalid or missing agent token")
     return agent
 

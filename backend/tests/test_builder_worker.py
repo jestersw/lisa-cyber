@@ -80,6 +80,8 @@ class FakeAgent:
         self.config = config
         self.os_type = os_type
         self.agent_token = None
+        self.enrollment_token_hash = None
+        self.enrolled = False
         self.binary_url = None
         self.installer_url = None
         self.version_info = None
@@ -134,15 +136,18 @@ def test_process_success_sets_status_ready_and_binary_url(tmp_path):
 
     assert agent.status == "ready"
     assert agent.binary_url == "/api/builds/USR001/agent_USR001"
-    assert agent.agent_token is not None
-    assert len(agent.agent_token) == 64  # sha256 hex of the per-build token (#201)
+    # The build bakes a one-time enrollment token (#201 part B): the server keeps
+    # only its hash, no real token yet, and the agent is not enrolled.
+    assert agent.agent_token is None
+    assert agent.enrolled is False
+    assert len(agent.enrollment_token_hash) == 64  # sha256 hex of the enroll token
 
     call_kwargs = mock_build.call_args.kwargs
     assert call_kwargs["agent_id"] == "USR001"
-    # The plaintext token is baked into the binary; the server stores only its
-    # hash, so the stored value is the hash of what was passed to the builder.
-    assert call_kwargs["agent_token"] != agent.agent_token
-    assert hash_agent_token(call_kwargs["agent_token"]) == agent.agent_token
+    # The plaintext enrollment token is baked into the binary; only its hash is
+    # stored, so the stored hash matches the hash of what was passed to the build.
+    assert call_kwargs["agent_token"] != agent.enrollment_token_hash
+    assert hash_agent_token(call_kwargs["agent_token"]) == agent.enrollment_token_hash
     assert call_kwargs["backend_url"] == "http://b:8000"
     assert call_kwargs["target_os"] == "linux"
 

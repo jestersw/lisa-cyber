@@ -22,6 +22,7 @@ import sys
 
 from lisa_agent.activity import ActivityEngine, Application
 from lisa_agent.config import Config, WorkSchedule
+from lisa_agent.enroll import resolve_token
 from lisa_agent.heartbeat import HeartbeatLoop, HeartbeatSender, build_payload
 from lisa_agent.installer import ensure_all_installed
 from lisa_agent.mutex import make_mutex
@@ -51,12 +52,16 @@ def _package_path() -> str:
     return os.environ.get("LISA_PACKAGE_PATH", "./package.json")
 
 
-def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
+def build_agent(env_config: Config, pkg: DeploymentPackage, auth_token: str | None = None) -> Agent:
     """Assemble every runtime object from the loaded config + package.
 
     Separated from main() so it can be tested without actually running the loop.
+    `auth_token` is the token the agent presents to the backend; main() passes
+    the real token resolved via enrollment (#201 part B). When omitted it falls
+    back to the env token, which keeps existing callers and tests working.
     """
     identity = pkg.identity
+    auth_token = auth_token if auth_token is not None else env_config.auth_token
 
     # One-per-machine lock, keyed to this agent's identity. make_mutex picks
     # the POSIX or Windows implementation for the host it's running on.
@@ -77,7 +82,7 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
     next_app_client = NextAppClient(
         backend_url=env_config.backend_url,
         agent_id=identity.agent_id,
-        token=env_config.auth_token,
+        token=auth_token,
     )
 
     def next_app_provider(
@@ -91,7 +96,7 @@ def build_agent(env_config: Config, pkg: DeploymentPackage) -> Agent:
     # Heartbeat: one sender, wrapped in a loop that runs on a background thread.
     sender = HeartbeatSender(
         url=f"{env_config.backend_url}/api/agents/heartbeat",
-        token=env_config.auth_token,
+        token=auth_token,
     )
 
     def payload_provider() -> dict:
@@ -155,7 +160,16 @@ def main() -> int:
         len(pkg.applications),
     )
 
-    agent = build_agent(env_config, pkg)
+    # Resolve the real token: use the stored one, else exchange the baked
+    # one-time enrollment token for it at install time (#201 part B). A secured
+    # backend with no obtainable token means we can't authenticate, so fail fast
+    # rather than loop sending rejected heartbeats.
+    auth_token = resolve_token(env_config.backend_url, pkg.identity.agent_id, env_config.auth_token)
+    if env_config.auth_token and auth_token is None:
+        log.error("could not obtain an agent token (enrollment failed); exiting")
+        return 3
+
+    agent = build_agent(env_config, pkg, auth_token=auth_token)
     agent.install_signal_handlers()
     agent.start()  # blocks; returns when the loop is stopped
     return 0
