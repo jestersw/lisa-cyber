@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,7 +21,10 @@ def create_role(role: RoleCreate, db: Session = Depends(get_db)):
 
 @router.get("/roles", response_model=list[RoleResponse])
 def list_roles(
-    category: str | None = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    category: str | None = Query(default=None, max_length=100),
+    skip: int = Query(default=0, ge=0, le=1_000_000),
+    limit: int = Query(default=100, ge=1, le=1000),
+    db: Session = Depends(get_db),
 ):
     query = db.query(Role).filter(Role.is_active.is_(True))
     if category:

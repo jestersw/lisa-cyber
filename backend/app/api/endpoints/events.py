@@ -42,7 +42,11 @@ def ingest_events(agent_id: str, batch: ActivityEventBatch, db: Session = Depend
     response_model=list[ActivityEventResponse],
     dependencies=[Depends(require_operator)],
 )
-def list_agent_events(agent_id: str, limit: int = 100, db: Session = Depends(get_db)):
+def list_agent_events(
+    agent_id: str,
+    limit: int = Query(default=100, ge=1, le=10000),
+    db: Session = Depends(get_db),
+):
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -58,7 +62,7 @@ def list_agent_events(agent_id: str, limit: int = 100, db: Session = Depends(get
 @router.get("/events/export", dependencies=[Depends(require_operator)])
 def export_events(
     since: datetime | None = None,
-    limit: int = Query(default=10000, le=100000),
+    limit: int = Query(default=10000, ge=1, le=100000),
     db: Session = Depends(get_db),
 ):
     query = db.query(ActivityEvent)

@@ -44,7 +44,7 @@ def _global_counts(model: dict) -> dict[str, int]:
 @router.get("/agents/{agent_id}/next-activity", dependencies=[Depends(require_agent_token)])
 def next_activity(
     agent_id: str,
-    current: str | None = Query(default=None),
+    current: str | None = Query(default=None, max_length=200),
     sample: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
