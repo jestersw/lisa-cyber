@@ -22,5 +22,11 @@
       (host {{ inventory_hostname }} is {{ ansible_system }}). Windows is #200.
     quiet: true
 
+- name: "Build the installer URL (with download token when set, #202)"
+  ansible.builtin.set_fact:
+    lisa_agent_installer_url: >-
+      {{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh{{
+        ('?token=' + lisa_agent_download_token) if lisa_agent_download_token else '' }}
+
 - name: Install the agent (OS-specific)
   ansible.builtin.include_tasks: "{{ ansible_system | lower }}.yml"

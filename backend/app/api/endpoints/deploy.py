@@ -20,6 +20,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.models import Agent, Deployment
 from app.schemas import DeploymentResponse, DeployRequest
+from app.security import create_download_token
 from app.services.deploy import runner
 from app.services.deploy.inventory import InventoryError, render_inventory
 
@@ -45,8 +46,20 @@ def deploy_agent(
             detail="Agent has no build yet; build it before deploying.",
         )
 
+    settings = get_settings()
     targets = [t.model_dump() for t in request.targets]
-    backend_url = request.backend_url or get_settings().public_base_url
+    backend_url = request.backend_url or settings.public_base_url
+
+    # Build downloads are token-guarded when the panel is locked (#202); mint a
+    # scoped token for this installer so the playbook's get_url authenticates.
+    # In dev (no operator password) the endpoint is open, so we skip it.
+    installer_file = f"installer_{agent_id}.sh"
+    download_token = (
+        create_download_token(agent_id, installer_file)
+        if settings.operator_password is not None
+        else None
+    )
+
     try:
         inventory_text = render_inventory(agent_id, agent.os_type, targets)
     except InventoryError as exc:
@@ -70,6 +83,7 @@ def deploy_agent(
         inventory_text,
         backend_url=backend_url,
         force=request.force,
+        download_token=download_token,
     )
     log.info("deployment %s queued for agent %s (%d hosts)", deployment.id, agent_id, len(targets))
     return deployment

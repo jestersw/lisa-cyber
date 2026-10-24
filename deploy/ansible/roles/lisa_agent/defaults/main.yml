@@ -30,3 +30,10 @@ lisa_agent_force_reinstall: false
 # Where the agent binary lands on the target. Must match the installer's
 # install_dir (Linux) — the role uses it only to detect an existing install.
 lisa_agent_linux_install_dir: "/opt/lisa"
+
+# Token for fetching the build artefact when downloads are guarded (#202).
+# The panel-triggered deploy mints a scoped token automatically; for a manual
+# run with a locked backend, pass an operator token here (or leave empty when
+# the backend is open / dev mode):
+#   -e lisa_agent_download_token=<operator-jwt-or-scoped-token>
+lisa_agent_download_token: ""

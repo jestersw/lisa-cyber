@@ -169,6 +169,20 @@ for the full variable reference. The playbook is syntax-checked and
 **Note:** like Pattern 3 this needs SSH from the control node to each target,
 but it scales — one inventory, one command for the whole range.
 
+**Locked backend (#202).** When `OPERATOR_PASSWORD` is set, the installer
+download is token-guarded. For a manual run, pass an operator token obtained
+from `POST /api/auth/login`:
+
+```sh
+ansible-playbook deploy-agents.yml \
+    -e lisa_agent_backend_url=https://backend:8000 \
+    -e lisa_agent_download_token=<operator-token>
+```
+
+The panel-triggered deploy (below) mints a scoped token automatically, so no
+token is needed there. In dev mode (no operator password) downloads are open
+and the token can be omitted everywhere.
+
 ### From the panel
 
 The same orchestration can be triggered from the operator panel for a built

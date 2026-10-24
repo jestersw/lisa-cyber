@@ -53,11 +53,25 @@ def ansible_available() -> bool:
     return (playbook_dir() / _PLAYBOOK).is_file()
 
 
+def extra_vars(backend_url: str, force: bool, download_token: str | None) -> list[str]:
+    """The `-e key=value` args passed to ansible-playbook. Kept pure so the
+    argument construction (incl. the #202 download token) is unit-testable."""
+    args = ["-e", f"lisa_agent_backend_url={backend_url}"]
+    if force:
+        args += ["-e", "lisa_agent_force_reinstall=true"]
+    if download_token:
+        # Build artefacts are token-guarded when an operator password is set
+        # (#202); the role appends this to the installer URL so get_url passes.
+        args += ["-e", f"lisa_agent_download_token={download_token}"]
+    return args
+
+
 def run_playbook(
     inventory_text: str,
     *,
     backend_url: str,
     force: bool = False,
+    download_token: str | None = None,
     timeout: int = DEPLOY_TIMEOUT_SECONDS,
 ) -> tuple[int, str]:
     """Run the deployment playbook against `inventory_text`.
@@ -79,13 +93,16 @@ def run_playbook(
         _PLAYBOOK,
         "-i",
         inventory_path,
-        "-e",
-        f"lisa_agent_backend_url={backend_url}",
+        *extra_vars(backend_url, force, download_token),
     ]
-    if force:
-        cmd += ["-e", "lisa_agent_force_reinstall=true"]
 
-    log.info("running deployment playbook: %s (cwd=%s)", " ".join(cmd), directory)
+    # Don't log the token value (short-lived, but still a credential).
+    log.info(
+        "running deployment playbook (cwd=%s force=%s tokened=%s)",
+        directory,
+        force,
+        download_token is not None,
+    )
     try:
         proc = subprocess.run(  # noqa: S603 - argv list, no shell, validated input
             cmd,
