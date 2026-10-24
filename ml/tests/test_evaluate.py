@@ -40,10 +40,36 @@ def test_evaluate_scores_all_candidates_in_range():
     events = generate_events(agents=5, days=8, per_day=40, seed=2)
     scores = evaluate(events)
     names = {s.name for s in scores}
-    assert names == {"markov(app)", "markov(app_hour)", "most_frequent", "persist"}
+    assert names == {
+        "markov(app)",
+        "markov(app_hour)",
+        "backoff(app)",
+        "backoff(app_hour)",
+        "markov(bigram)",
+        "backoff(bigram)",
+        "most_frequent",
+        "persist",
+    }
     assert all(isinstance(s, Score) and 0.0 <= s.accuracy <= 1.0 and s.n > 0 for s in scores)
     # sorted best-first
     assert scores == sorted(scores, key=lambda s: s.accuracy, reverse=True)
+
+
+def test_backoff_never_worse_than_markov():
+    # Back-off only changes behaviour on states unseen in training, where it
+    # guesses the global mode instead of nothing — so accuracy can only hold or
+    # improve. A sparse, finely-split config makes the gain show up.
+    events = generate_events(agents=12, days=2, per_day=12, seed=7)
+    by_name = {s.name: s.accuracy for s in evaluate(events)}
+    assert by_name["backoff(app)"] >= by_name["markov(app)"]
+    assert by_name["backoff(app_hour)"] >= by_name["markov(app_hour)"]
+
+
+def test_bigram_candidate_runs_on_history_states():
+    events = generate_events(agents=4, days=5, per_day=30, seed=8)
+    scores = {s.name: s for s in evaluate(events)}
+    assert scores["markov(bigram)"].n > 0
+    assert 0.0 <= scores["markov(bigram)"].accuracy <= 1.0
 
 
 def test_markov_beats_the_most_frequent_floor_on_structured_data():

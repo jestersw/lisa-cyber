@@ -34,6 +34,16 @@ def test_model_prediction_is_returned(monkeypatch):
     assert seen["headers"]["Authorization"] == "Bearer secret"
 
 
+def test_backoff_source_is_trusted(monkeypatch):
+    # A global-marginal back-off is still a model-backed, data-driven guess (#51).
+    monkeypatch.setattr(
+        na.requests,
+        "get",
+        lambda *a, **k: FakeResponse(200, {"next_activity": "terminal", "source": "backoff"}),
+    )
+    assert _client().fetch("gimp") == "terminal"
+
+
 def test_backend_fallback_source_yields_none(monkeypatch):
     # The backend's own static fallback is not trusted; the agent falls back locally.
     monkeypatch.setattr(

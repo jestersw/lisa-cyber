@@ -44,10 +44,11 @@ class NextAppClient:
     def fetch(self, current: str | None) -> str | None:
         """Return the suggested next app name, or None to fall back locally.
 
-        We only trust a model-backed prediction: when the backend reports
-        ``source`` other than ``"model"`` (its own static fallback), we return
-        None so the agent's richer local fallback provides the variety a
-        constant guess would not.
+        We trust a model-backed prediction: ``source`` ``"model"`` (a prediction
+        for the current state) or ``"backoff"`` (the model's global marginal for
+        a state unseen in training — still data-driven, #51). Only the backend's
+        static ``"fallback"`` (a constant guess with no model behind it) returns
+        None, so the agent's richer local fallback provides that variety instead.
         """
         if not self.backend_url:
             return None
@@ -68,7 +69,7 @@ class NextAppClient:
         except ValueError:
             log.debug("next-activity returned non-JSON, falling back")
             return None
-        if data.get("source") != "model":
+        if data.get("source") not in ("model", "backoff"):
             return None
         nxt = data.get("next_activity")
         return nxt if isinstance(nxt, str) and nxt else None

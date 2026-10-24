@@ -48,8 +48,20 @@ def test_fallback_without_model(client, tmp_path):
     assert body["next_activity"] == "vscode"
 
 
-def test_fallback_for_unknown_state(client, tmp_path):
+def test_backoff_for_unknown_state(client, tmp_path):
+    # An unseen state backs off to the model's global marginal (#51) instead of
+    # a constant fallback: terminal is the most frequent next app overall.
     configure_store(_models(tmp_path))
+    agent_id = _agent(client)
+    body = client.get(f"/api/agents/{agent_id}/next-activity?current=gimp").json()
+    assert body["source"] == "backoff"
+    assert body["next_activity"] == "terminal"
+    assert "terminal" in body["distribution"]
+
+
+def test_fallback_without_model_for_unknown_state(client, tmp_path):
+    # With no model at all there is nothing to back off to: constant fallback.
+    configure_store(tmp_path)
     agent_id = _agent(client)
     body = client.get(f"/api/agents/{agent_id}/next-activity?current=gimp").json()
     assert body["source"] == "fallback"
