@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +43,21 @@ class Settings(BaseSettings):
     llm_timeout: float = 60.0
 
     heartbeat_interval_seconds: int = 86400
+
+    @field_validator("operator_password", "jwt_secret", "agent_token", "llm_api_key", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """Treat an empty/whitespace env var as unset (None).
+
+        docker-compose always injects these as `${VAR:-}`, i.e. an empty string
+        when not provided, and `.env.example` ships them blank to mean "open /
+        dev mode". The auth layer keys dev mode on `is None`, so without this a
+        blank OPERATOR_PASSWORD/AGENT_TOKEN would be read as a real empty secret
+        that nothing can match — locking the panel instead of opening it.
+        """
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
 
 @lru_cache
