@@ -24,12 +24,29 @@ from app.schemas import (
     AgentResponse,
     DeploymentPackage,
 )
-from app.security import require_agent_token, require_operator
+from app.security import create_download_token, require_agent_token, require_operator
 from app.services.agent_builder.worker import enqueue_build
 
 log = logging.getLogger("lisa.agents")
 
 router = APIRouter()
+
+
+def _signed_artefact_url(url: str | None) -> str | None:
+    """Append a short-lived download token to a build-artefact URL (#202).
+
+    The URL shape is /api/builds/{agent_id}/{filename}; we mint a token scoped
+    to exactly that agent_id + filename so the panel's <a download> link (which
+    can't send an auth header) still passes require_download_access. In dev mode
+    (no operator password) the download endpoint is open, so we leave the URL
+    untouched and avoid handing out a token nothing checks."""
+    if not url or get_settings().operator_password is None:
+        return url
+    parts = url.rstrip("/").rsplit("/", 2)
+    if len(parts) < 3:
+        return url  # not the shape we expect; leave it alone
+    _, agent_id, filename = parts
+    return f"{url}?token={create_download_token(agent_id, filename)}"
 
 
 def _queue_build(db: Session, agent: Agent) -> str:
@@ -171,8 +188,8 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
             else (agent.config or {}).get("agent_info", {}).get("role"),
             "template": agent.template.name if agent.template else None,
             "last_seen": agent.last_seen,
-            "binary_url": agent.binary_url,
-            "installer_url": agent.installer_url,
+            "binary_url": _signed_artefact_url(agent.binary_url),
+            "installer_url": _signed_artefact_url(agent.installer_url),
         },
         "recent_activities": [
             {"id": a.id, "type": a.activity_type, "data": a.activity_data, "timestamp": a.timestamp}

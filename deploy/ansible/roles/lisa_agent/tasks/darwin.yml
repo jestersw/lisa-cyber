@@ -34,6 +34,9 @@
         dest: "{{ lisa_agent_installer_tmp }}"
         mode: "0755"
         force: true
+        # Authenticate the download (#202) when a token is supplied; omitted
+        # when empty, for a dev-mode (open) backend.
+        headers: "{{ {'Authorization': 'Bearer ' + lisa_agent_api_token} if lisa_agent_api_token else omit }}"
 
     - name: Run the installer (macOS)
       ansible.builtin.command:
