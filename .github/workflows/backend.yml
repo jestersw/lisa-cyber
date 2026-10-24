@@ -32,6 +32,8 @@ jobs:
         run: ruff format --check .
       - name: Mypy
         run: mypy app
+      - name: No raw SQL built from runtime data (SQLi guard)
+        run: python scripts/check_no_raw_sql.py
 
   test:
     runs-on: ubuntu-latest
