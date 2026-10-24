@@ -137,15 +137,20 @@ Linux and macOS targets.
 ```sh
 cd deploy/ansible
 cp inventory.example.ini inventory.ini    # one host line per target, each with its lisa_agent_id
-ansible-playbook deploy-agents.yml -e lisa_agent_backend_url=http://backend:8000
+ansible-playbook deploy-agents.yml -e lisa_agent_backend_url=https://backend:8000
 ```
+
+The agent requires an `https` backend URL so its token and heartbeats are
+encrypted on the wire (#55). Plaintext `http` is accepted only for a loopback
+host (local dev / the build smoke test) or when `LISA_ALLOW_INSECURE_HTTP=1` is
+set in the agent's environment for a trusted, isolated network.
 
 Update a deployed fleet (on Linux this stops the running agent first, since the
 Linux installer has no stop step; macOS reloads its LaunchAgent itself):
 
 ```sh
 ansible-playbook deploy-agents.yml \
-    -e lisa_agent_backend_url=http://backend:8000 -e lisa_agent_force_reinstall=true
+    -e lisa_agent_backend_url=https://backend:8000 -e lisa_agent_force_reinstall=true
 ```
 
 A plain re-run without the flag skips hosts that already have the agent, so it's
