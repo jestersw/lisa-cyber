@@ -46,7 +46,10 @@ services:
       - "8000:8000"
     volumes:
       - models:/models
-      - builds:/var/lisa/builds
+      # Bind a host dir (not a named volume) so an out-of-container build
+      # worker (macOS/Windows) can share it — set LISA_BUILDS_DIR to the same
+      # path when running such a worker. Defaults to ./.builds in the repo.
+      - ${LISA_BUILDS_DIR:-./.builds}:/var/lisa/builds
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +68,7 @@ services:
       LISA_BACKEND_URL: ${LISA_BACKEND_URL:-http://backend:8000}
     volumes:
       - ./agent:/agent-src:ro
-      - builds:/var/lisa/builds
+      - ${LISA_BUILDS_DIR:-./.builds}:/var/lisa/builds
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,4 +100,3 @@ services:
 volumes:
   pgdata:
   models:
-  builds:

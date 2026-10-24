@@ -311,6 +311,14 @@ one build worker per target OS, each draining its own Redis queue
 (`lisa:builder:jobs:<os>`). A worker only pops jobs for the OS it can build, so
 a Linux worker never picks up a macOS job and vice versa.
 
+**Shared artefact storage.** Built artefacts are written to (and served from)
+`LISA_BUILDS_DIR` (default `/var/lisa/builds`). The compose stack bind-mounts a
+host directory there — `${LISA_BUILDS_DIR:-./.builds}` — for the backend and the
+Linux builder. A worker running *outside* the container (macOS/Windows) can't
+use that bind, so point it at the **same host directory** via `LISA_BUILDS_DIR`;
+otherwise the worker builds fine but the backend can't serve the installer (the
+panel's download and Ansible fetch would 404).
+
 - **Linux** is built by the `builder` service in `docker-compose.yml` (runs on
   `linux/amd64`). This is the default; `BUILDABLE_OS=["linux"]`.
 - **macOS** needs a worker running on a Mac. Nuitka can't produce a Mach-O
@@ -328,8 +336,14 @@ export LISA_AGENT_SOURCE_ROOT="$PWD/agent/lisa_agent"
 export LISA_BACKEND_URL="https://<backend-host>"   # what the agent phones home to
 export DATABASE_URL=...        # same DB as the backend
 export REDIS_URL=...           # same Redis as the backend
+export LISA_BUILDS_DIR="$PWD/.builds"   # SAME host dir the backend bind-mounts
 python -m app.services.agent_builder   # from backend/, drains the macos queue
 ```
+
+`LISA_BUILDS_DIR` must resolve to the same host directory the backend serves
+from (the compose bind, `./.builds` by default) so the worker's installer is
+downloadable from the panel. Without it the worker falls back to
+`/var/lisa/builds`, which the containerised backend never sees.
 
 The worker logs `os=macos queue=lisa:builder:jobs:macos` on startup. Then tell
 the backend a macOS worker exists so it enqueues macOS builds instead of

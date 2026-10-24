@@ -3,8 +3,16 @@ import pytest
 from app.services.agent_builder.storage import (
     StorageError,
     StoredArtefacts,
+    resolve_builds_root,
     store,
 )
+
+
+def test_builds_root_defaults_and_env_override(monkeypatch):
+    monkeypatch.delenv("LISA_BUILDS_DIR", raising=False)
+    assert str(resolve_builds_root()) == "/var/lisa/builds"
+    monkeypatch.setenv("LISA_BUILDS_DIR", "/srv/lisa/out")
+    assert str(resolve_builds_root()) == "/srv/lisa/out"
 
 
 def _prepare_workspace_output(tmp_path):

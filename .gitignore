@@ -23,3 +23,6 @@ dist/
 
 model.json
 *.egg-info/
+
+# local build artefacts (bind-mounted into backend/builder)
+.builds/
