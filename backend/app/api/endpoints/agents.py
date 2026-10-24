@@ -24,7 +24,7 @@ from app.schemas import (
     AgentResponse,
     DeploymentPackage,
 )
-from app.security import create_download_token, require_agent_token, require_operator
+from app.security import create_download_token, require_agent, require_operator
 from app.services.agent_builder.worker import enqueue_build
 
 log = logging.getLogger("lisa.agents")
@@ -201,13 +201,8 @@ def get_agent_status(agent_id: str, db: Session = Depends(get_db)):
 @router.get(
     "/agents/{agent_id}/config",
     response_model=DeploymentPackage,
-    dependencies=[Depends(require_agent_token)],
 )
-def get_agent_config(agent_id: str, db: Session = Depends(get_db)):
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+def get_agent_config(agent: Agent = Depends(require_agent), db: Session = Depends(get_db)):
     stored = agent.config or {}
     if "agent_info" in stored:
         agent_config = stored
