@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: lisa_agent
+  namespace: lisa
+  author: LISA
+  description: Fetch a built LISA agent installer from the backend and run it on a host.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "all"
+    - name: Ubuntu
+      versions:
+        - "all"
+    - name: MacOSX
+      versions:
+        - "all"
+  galaxy_tags:
+    - lisa
+    - cyberrange
+    - deployment
+dependencies: []

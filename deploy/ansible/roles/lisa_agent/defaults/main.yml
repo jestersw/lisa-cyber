@@ -1,0 +1,22 @@
+---
+# Backend that serves the built artefacts (and that the agent phones home to).
+# The installer is fetched from
+#   {{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh
+# Override per run: -e lisa_agent_backend_url=https://backend.corp.local
+lisa_agent_backend_url: "http://backend:8000"
+
+# Per-host agent identity. MUST be set per host in the inventory; the empty
+# default is deliberate so a misconfigured inventory fails loudly (see the
+# assert in tasks/main.yml) instead of fetching a nonexistent artefact.
+lisa_agent_id: ""
+
+# Re-deploy even if the agent already looks installed on the host. On Linux
+# this also stops the running agent first so an update replaces it instead of
+# leaving two processes behind (the Linux installer has no stop step of its
+# own). macOS updates are handled by the installer itself (launchctl reload),
+# so this flag only governs whether the fetch+run happens at all there.
+lisa_agent_force_reinstall: false
+
+# Where the agent binary lands on the target. Must match the installer's
+# install_dir (Linux) — the role uses it only to detect an existing install.
+lisa_agent_linux_install_dir: "/opt/lisa"

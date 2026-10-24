@@ -1,0 +1,26 @@
+---
+# Entry point: validate the per-host config, then dispatch to OS-specific
+# install tasks. `ansible_system` is "Linux" or "Darwin"; lowercased it picks
+# linux.yml / darwin.yml. An unsupported OS (e.g. Windows, #200) fails loudly
+# rather than silently doing nothing.
+- name: Require a per-host agent id
+  ansible.builtin.assert:
+    that:
+      - lisa_agent_id | length > 0
+    fail_msg: >-
+      lisa_agent_id is not set for {{ inventory_hostname }}. Set it as a host
+      var in the inventory, e.g.
+      `{{ inventory_hostname }} lisa_agent_id=USR1234567`.
+    quiet: true
+
+- name: Reject unsupported target OS
+  ansible.builtin.assert:
+    that:
+      - ansible_system | lower in ['linux', 'darwin']
+    fail_msg: >-
+      LISA agents can only be deployed to Linux or macOS today
+      (host {{ inventory_hostname }} is {{ ansible_system }}). Windows is #200.
+    quiet: true
+
+- name: Install the agent (OS-specific)
+  ansible.builtin.include_tasks: "{{ ansible_system | lower }}.yml"

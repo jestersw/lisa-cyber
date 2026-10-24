@@ -1,0 +1,23 @@
+---
+# Deploy or update LISA agents onto an inventory of target hosts.
+#
+# Each host runs exactly one agent, identified by `lisa_agent_id` (set as a
+# host var in the inventory). The role fetches that agent's installer from the
+# backend's build endpoint and runs it, so the operator never hand-runs the
+# installer on each machine.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini deploy-agents.yml \
+#       -e lisa_agent_backend_url=http://backend:8000
+#
+# Update an already-deployed fleet (stops the running agent, re-fetches, re-runs):
+#   ansible-playbook -i inventory.ini deploy-agents.yml \
+#       -e lisa_agent_backend_url=http://backend:8000 -e lisa_agent_force_reinstall=true
+#
+# The two groups below map to the two OSes the builder can produce binaries
+# for today (Linux + macOS). Windows is tracked separately in #200.
+- name: Deploy LISA agents
+  hosts: lisa_linux:lisa_macos
+  gather_facts: true
+  roles:
+    - role: lisa_agent

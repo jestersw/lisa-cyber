@@ -1,0 +1,58 @@
+---
+# Linux install/update. The installer drops the binary at
+# {{ lisa_agent_linux_install_dir }}/agent_<id> and launches it with `nohup &`
+# — it has no stop step, so re-running it would leave a second agent process.
+# We therefore stop any running agent ourselves before an update.
+- name: Set agent paths (Linux)
+  ansible.builtin.set_fact:
+    lisa_agent_path: "{{ lisa_agent_linux_install_dir }}/agent_{{ lisa_agent_id }}"
+    lisa_agent_installer_tmp: "/tmp/lisa-installer-{{ lisa_agent_id }}.sh"
+
+- name: Check for an existing install (Linux)
+  ansible.builtin.stat:
+    path: "{{ lisa_agent_path }}"
+  register: lisa_agent_existing
+
+- name: Decide whether to (re)install (Linux)
+  ansible.builtin.set_fact:
+    lisa_agent_should_install: "{{ lisa_agent_force_reinstall or not lisa_agent_existing.stat.exists }}"
+
+- name: Report skip when already installed (Linux)
+  ansible.builtin.debug:
+    msg: >-
+      {{ lisa_agent_id }} already installed at {{ lisa_agent_path }};
+      pass -e lisa_agent_force_reinstall=true to update.
+  when: not lisa_agent_should_install
+
+- name: Install/update the agent (Linux)
+  when: lisa_agent_should_install
+  block:
+    - name: Stop the running agent before updating (Linux)
+      ansible.builtin.command:
+        cmd: "pkill -f -- {{ lisa_agent_path }}"
+      register: lisa_agent_stop
+      # pkill exits 1 when nothing matched (fresh install) — not an error.
+      failed_when: lisa_agent_stop.rc not in [0, 1]
+      changed_when: lisa_agent_stop.rc == 0
+      when: lisa_agent_existing.stat.exists
+
+    - name: Fetch the installer from the backend (Linux)
+      ansible.builtin.get_url:
+        url: "{{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh"
+        dest: "{{ lisa_agent_installer_tmp }}"
+        mode: "0755"
+        force: true
+
+    - name: Run the installer (Linux)
+      ansible.builtin.command:
+        cmd: "{{ lisa_agent_installer_tmp }}"
+      register: lisa_agent_install_result
+      # The installer exits non-zero (with a stderr message) if the agent
+      # died within a second of launch; let that fail the play.
+      changed_when: lisa_agent_install_result.rc == 0
+
+  always:
+    - name: Remove the staged installer (Linux)
+      ansible.builtin.file:
+        path: "{{ lisa_agent_installer_tmp }}"
+        state: absent
