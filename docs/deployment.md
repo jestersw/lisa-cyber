@@ -236,6 +236,13 @@ rm -f "$HOME/Library/LaunchAgents/com.lisa.agent.<id>.plist" \
 
 Verify it's gone with `launchctl list | grep lisa` (should print nothing).
 
+**Testing a macOS agent in a throwaway VM.** Because the macOS installer
+registers a `KeepAlive` LaunchAgent, test it inside a disposable VM, not on your
+own Mac. On Apple Silicon, `scripts/tart-agent-test.sh <agent-id>` spins up a
+fresh [tart](https://tart.run) macOS VM, runs the installer there, and verifies
+the agent registered with launchd; `scripts/tart-agent-test.sh --cleanup` tears
+the VM down again. See the script header for options.
+
 ### Windows
 
 A Windows installer (built for `os_type=windows`) is a PowerShell script,
