@@ -76,6 +76,7 @@ hosts.
 | `lisa_agent_id` | `""` (**required per host**) | Agent identity for the host. Set as a host var. |
 | `lisa_agent_force_reinstall` | `false` | Re-deploy even if already installed (and stop the old Linux process first). |
 | `lisa_agent_linux_install_dir` | `/opt/lisa` | Where the Linux installer places the binary; used to detect an existing install. |
+| `lisa_agent_download_token` | `""` | Token for fetching the installer when build downloads are guarded (#202). The panel-triggered deploy sets it automatically; for a manual run against a locked backend pass an operator token (`-e lisa_agent_download_token=...`). Leave empty for an open/dev backend. |
 
 ## What the role does
 

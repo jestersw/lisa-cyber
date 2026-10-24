@@ -37,6 +37,7 @@ def run_deployment(
     *,
     backend_url: str,
     force: bool = False,
+    download_token: str | None = None,
     session_factory=None,
 ) -> None:
     """Run the deployment identified by `deployment_id` to completion."""
@@ -67,7 +68,10 @@ def run_deployment(
 
         try:
             returncode, output = ansible.run_playbook(
-                inventory_text, backend_url=backend_url, force=force
+                inventory_text,
+                backend_url=backend_url,
+                force=force,
+                download_token=download_token,
             )
         except subprocess.TimeoutExpired:
             log.warning("deployment %s timed out", deployment_id)

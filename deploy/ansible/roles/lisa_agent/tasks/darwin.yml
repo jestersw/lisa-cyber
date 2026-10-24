@@ -30,7 +30,7 @@
   block:
     - name: Fetch the installer from the backend (macOS)
       ansible.builtin.get_url:
-        url: "{{ lisa_agent_backend_url }}/api/builds/{{ lisa_agent_id }}/installer_{{ lisa_agent_id }}.sh"
+        url: "{{ lisa_agent_installer_url }}"
         dest: "{{ lisa_agent_installer_tmp }}"
         mode: "0755"
         force: true

@@ -3,6 +3,19 @@ import pytest
 import app.database as database
 from app.models.models import Agent
 from app.services.deploy import ansible
+from app.services.deploy.ansible import extra_vars
+
+
+def test_extra_vars_includes_download_token_when_set():
+    args = extra_vars("http://b:8000", force=False, download_token="tok123")
+    assert "lisa_agent_download_token=tok123" in args
+    assert "lisa_agent_backend_url=http://b:8000" in args
+
+
+def test_extra_vars_omits_token_when_none_and_handles_force():
+    args = extra_vars("http://b:8000", force=True, download_token=None)
+    assert "lisa_agent_force_reinstall=true" in args
+    assert not any("download_token" in a for a in args)
 
 
 def _built_agent(client, os_type: str = "linux") -> str:
@@ -25,10 +38,11 @@ def ansible_ok(monkeypatch):
     """Pretend ansible is installed and the playbook succeeds."""
     calls = {}
 
-    def fake_run(inventory_text, *, backend_url, force=False, **_):
+    def fake_run(inventory_text, *, backend_url, force=False, download_token=None, **_):
         calls["inventory"] = inventory_text
         calls["backend_url"] = backend_url
         calls["force"] = force
+        calls["download_token"] = download_token
         return 0, "PLAY RECAP\nweb01 : ok=3 changed=1 failed=0"
 
     monkeypatch.setattr(ansible, "ansible_available", lambda: True)
@@ -56,6 +70,14 @@ def test_deploy_runs_and_succeeds(client, ansible_ok):
     # The agent id reached the rendered inventory, and force was passed through.
     assert f"lisa_agent_id={agent_id}" in ansible_ok["inventory"]
     assert ansible_ok["force"] is True
+
+
+def test_deploy_no_token_in_dev_mode(client, ansible_ok):
+    # Operator password is unset in tests (dev); downloads are open, so no
+    # token is minted or passed to the playbook.
+    agent_id = _built_agent(client)
+    client.post(f"/api/agents/{agent_id}/deploy", json={"targets": [{"host": "h1"}]})
+    assert ansible_ok["download_token"] is None
 
 
 def test_deploy_uses_public_base_url_by_default(client, ansible_ok):
