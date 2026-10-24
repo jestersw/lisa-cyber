@@ -29,6 +29,18 @@ def _sample(counts: dict[str, int], rng: random.Random | None = None) -> str:
     return rng.choices(apps, weights=[counts[app] for app in apps], k=1)[0]
 
 
+def _global_counts(model: dict) -> dict[str, int]:
+    """Aggregate a model's per-state next-app counts into one global marginal.
+    Used for back-off (#51): for a state unseen in training we predict from the
+    overall next-app distribution instead of a constant fallback. Derived from
+    the same `counts` artifact, so no retraining or artifact change."""
+    agg: dict[str, int] = {}
+    for bucket in model.get("counts", {}).values():
+        for app, n in bucket.items():
+            agg[app] = agg.get(app, 0) + n
+    return agg
+
+
 @router.get("/agents/{agent_id}/next-activity", dependencies=[Depends(require_agent_token)])
 def next_activity(
     agent_id: str,
@@ -46,6 +58,16 @@ def next_activity(
     trimmed = restrict_model(model, applications) if model and applications else None
 
     counts = (trimmed or {}).get("counts", {}).get(state) if state else None
+    source = "model"
+    if not counts and trimmed:
+        # State unseen in training: back off to the model's global marginal (a
+        # data-driven guess) rather than a constant. Same artifact, strictly
+        # better than the old fixed fallback (#51).
+        global_counts = _global_counts(trimmed)
+        if global_counts:
+            counts = global_counts
+            source = "backoff"
+
     if not counts:
         fallback = applications[0] if applications else get_settings().default_activity
         return {
@@ -64,7 +86,7 @@ def next_activity(
         "current": state,
         "next_activity": predicted,
         "activity_type": "use",
-        "source": "model",
+        "source": source,
         "trained_on": trimmed.get("trained_on") if trimmed else None,
         "distribution": {app: round(n / total, 3) for app, n in counts.items()},
     }

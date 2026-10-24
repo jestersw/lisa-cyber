@@ -21,13 +21,23 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from lisa_ml.features import StateKey, _by_agent, build_transitions, state_app, state_app_hour
-from lisa_ml.model import MarkovModel
+from lisa_ml.features import (
+    StateKey,
+    _by_agent,
+    build_bigram_transitions,
+    build_transitions,
+    state_app,
+    state_app_hour,
+)
+from lisa_ml.model import BackoffMarkovModel, MarkovModel
 from lisa_ml.schema import Event
+
+TransitionBuilder = Callable[[list[Event]], list[tuple[str, str]]]
 
 
 class NextAppPredictor(Protocol):
@@ -89,6 +99,15 @@ class Candidate:
     name: str
     state_key: StateKey
     factory: object  # callable returning a fresh predictor with .fit
+    # Optional custom transition builder (e.g. higher-order history). When set
+    # it is used instead of build_transitions(events, state_key), so a candidate
+    # can train/score on a different state space (the agent sees Event lists).
+    transitions: TransitionBuilder | None = None
+
+    def build(self, events: list[Event]) -> list[tuple[str, str]]:
+        if self.transitions is not None:
+            return self.transitions(events)
+        return build_transitions(events, self.state_key)
 
 
 def _top1_accuracy(
@@ -106,6 +125,12 @@ def default_candidates() -> list[Candidate]:
     return [
         Candidate("markov(app)", state_app, MarkovModel),
         Candidate("markov(app_hour)", state_app_hour, MarkovModel),
+        Candidate("backoff(app)", state_app, BackoffMarkovModel),
+        Candidate("backoff(app_hour)", state_app_hour, BackoffMarkovModel),
+        Candidate("markov(bigram)", state_app, MarkovModel, transitions=build_bigram_transitions),
+        Candidate(
+            "backoff(bigram)", state_app, BackoffMarkovModel, transitions=build_bigram_transitions
+        ),
         Candidate("most_frequent", state_app, MostFrequentApp),
         Candidate("persist", state_app, PersistApp),
     ]
@@ -123,8 +148,8 @@ def evaluate(
     scores: list[Score] = []
     for cand in candidates:
         model = cand.factory()  # type: ignore[operator]
-        model.fit(build_transitions(train_events, cand.state_key))
-        acc, n = _top1_accuracy(model, build_transitions(test_events, cand.state_key))
+        model.fit(cand.build(train_events))
+        acc, n = _top1_accuracy(model, cand.build(test_events))
         scores.append(Score(cand.name, acc, n))
     return sorted(scores, key=lambda s: s.accuracy, reverse=True)
 

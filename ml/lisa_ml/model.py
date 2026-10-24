@@ -43,7 +43,9 @@ class MarkovModel:
             kept = {app: n for app, n in nexts.items() if app in allowed}
             if kept:
                 trimmed[state] = kept
-        model = MarkovModel(trained_on=self.trained_on)
+        # type(self) so a subclass (e.g. BackoffMarkovModel) restricts to its
+        # own type rather than collapsing back to a plain MarkovModel.
+        model = type(self)(trained_on=self.trained_on)
         model.counts = trimmed
         return model
 
@@ -59,3 +61,55 @@ class MarkovModel:
     @classmethod
     def load(cls, path: str | Path) -> MarkovModel:
         return cls.from_dict(json.loads(Path(path).read_text()))
+
+
+class BackoffMarkovModel(MarkovModel):
+    """First-order Markov with back-off to the global next-app marginal.
+
+    Identical to :class:`MarkovModel` when the current state was seen in
+    training; but for a state unseen in training — the cold-start and sparse
+    states that real logs (and finely-split keys like ``app_hour``) always
+    contain — it predicts the globally most frequent next app instead of
+    nothing. So it is never worse than plain Markov on top-1 accuracy and
+    recovers the accuracy that over-splitting the state space throws away.
+
+    Crucially it serialises to the *same* artifact as :class:`MarkovModel`: the
+    global distribution is derived from ``counts`` at inference, so there is no
+    new artifact field. A model trained/stored as Markov can be loaded as a
+    BackoffMarkovModel (and vice versa) with no change to the `counts` contract
+    the agent and backend consume — the upgrade is purely in inference.
+    """
+
+    def __init__(self, trained_on: str | None = None) -> None:
+        super().__init__(trained_on=trained_on)
+        self._global_cache: dict[str, int] | None = None
+
+    def fit(self, transitions: list[tuple[str, str]]) -> BackoffMarkovModel:
+        super().fit(transitions)
+        self._global_cache = None  # counts changed; drop the memoised marginal
+        return self
+
+    def _global(self) -> dict[str, int]:
+        if self._global_cache is None:
+            agg: dict[str, int] = {}
+            for bucket in self.counts.values():
+                for app, n in bucket.items():
+                    agg[app] = agg.get(app, 0) + n
+            self._global_cache = agg
+        return self._global_cache
+
+    def predict_proba(self, state: str) -> dict[str, float]:
+        bucket = self.counts.get(state) or self._global()
+        if not bucket:
+            return {}
+        total = sum(bucket.values())
+        return {app: n / total for app, n in bucket.items()}
+
+    def predict_next(self, state: str) -> str | None:
+        bucket = self.counts.get(state)
+        if bucket:
+            return max(bucket.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        agg = self._global()
+        if not agg:
+            return None
+        return max(agg.items(), key=lambda kv: (kv[1], kv[0]))[0]

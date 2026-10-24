@@ -58,6 +58,18 @@ def build_transitions(
     return pairs
 
 
+def build_bigram_transitions(events: Iterable[Event]) -> list[tuple[str, str]]:
+    """Second-order transitions: state is the previous two apps ("a>b"), target
+    is the next app. A higher-order model ("beyond Markov") trains on these; the
+    composite state is still just a string, so it serialises into the same
+    `counts` artifact as the first-order model."""
+    pairs: list[tuple[str, str]] = []
+    for rows in _by_agent(events).values():
+        for a, b, c in zip(rows, rows[1:], rows[2:], strict=False):
+            pairs.append((f"{a.app}>{b.app}", c.app))
+    return pairs
+
+
 def feature_rows(events: Iterable[Event]) -> list[dict]:
     rows: list[dict] = []
     for agent_rows in _by_agent(events).values():
