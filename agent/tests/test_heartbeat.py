@@ -116,3 +116,16 @@ def test_loop_start_stop_sends_at_least_once():
     time.sleep(0.15)
     loop.stop()
     assert len(fake.sent) >= 1
+
+
+def test_nudge_sends_off_thread():
+    fake = FakeSender()
+    loop = HeartbeatLoop(fake, lambda: {"tick": 1}, interval_seconds=100)
+    loop.nudge()  # returns immediately; the send happens on a daemon thread
+    import time
+
+    for _ in range(50):  # wait up to ~0.5s for the background send to land
+        if fake.sent:
+            break
+        time.sleep(0.01)
+    assert fake.sent == [{"tick": 1}]

@@ -48,6 +48,7 @@ class FakeHeartbeat:
         self.started = False
         self.stopped = False
         self.forced = 0
+        self.nudged = 0
 
     def start(self):
         self.started = True
@@ -58,6 +59,9 @@ class FakeHeartbeat:
     def force(self):
         self.forced += 1
         return True
+
+    def nudge(self):
+        self.nudged += 1
 
 
 class FakeMutex:
@@ -146,6 +150,8 @@ def test_working_hours_opens_an_app_and_performs_activity():
     assert engine.activities >= 1
     assert heartbeat.started is True
     assert heartbeat.forced >= 1  # at least the initial force() on start
+    # Opening an app nudges the heartbeat so the panel reflects it immediately.
+    assert heartbeat.nudged >= 1
 
 
 def test_shutdown_closes_current_app_and_sends_final_heartbeat():
