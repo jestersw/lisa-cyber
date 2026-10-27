@@ -2,6 +2,11 @@
 #
 # End-to-end test of a LISA macOS agent installer inside a throwaway tart VM.
 #
+# DEVELOPER TOOL, not a deployment path. This exists so we can smoke-test the
+# macOS installer on a clean VM while working on LISA. Operators deploying to a
+# range never use this or install tart — they deploy to their own range hosts
+# (see docs/deployment.md).
+#
 # Builds nothing — it takes an already-built agent (its installer), spins up a
 # fresh macOS VM with tart, runs the installer there, and checks the agent
 # registered with launchd. The installer only ever runs INSIDE the VM, never on

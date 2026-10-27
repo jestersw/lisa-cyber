@@ -18,10 +18,33 @@ scripted downloads (curl, Ansible) pass an operator token obtained from
 `?token=<token>` query parameter. When the backend runs in dev mode (no
 `OPERATOR_PASSWORD` set) the endpoint is open and no token is needed.
 
+### Where agents go
+
+The targets are **your range's own hosts** — the Windows / Linux / macOS
+machines that make up the cyber range you're training a blue team on. LISA does
+not provide those machines; it builds an agent per host and puts it there so the
+host emits realistic benign-user telemetry into your SIEM/EDR. So "deploying an
+agent" always means: build it in the panel, then get the installer onto a host
+you already run. You never need to download a VM manager or any extra tooling to
+deploy — the patterns below only need SSH (or a hypervisor API) to the hosts you
+already have.
+
+> **Testing locally vs. deploying.** `scripts/tart-agent-test.sh` and
+> [tart](https://tart.run) (see *Testing a macOS agent in a throwaway VM* below)
+> are a **developer-only** convenience for us to smoke-test the macOS installer
+> on a clean VM without touching our own Mac. They are **not** part of how anyone
+> uses the platform — an operator deploying to their range never installs tart or
+> downloads a macOS image. If you're an operator, ignore tart entirely and use a
+> pattern below.
+
 Which artefact you use depends on how you get files onto the target VM. Below
-are the three patterns we support out of the box. They're not exclusive — the
-same installer works in all three. The Linux examples below use the `.sh`
+are the patterns we support out of the box. They're not exclusive — the
+same installer works in all of them. The Linux examples below use the `.sh`
 installer; for a Windows target substitute the `.ps1` (see the Windows section).
+
+The easiest path is **Pattern 4 (Ansible from the panel)**: you don't touch the
+installer by hand at all — the panel renders an inventory and runs the playbook
+onto the hosts you name.
 
 ---
 
@@ -271,12 +294,18 @@ rm -f "$HOME/Library/LaunchAgents/com.lisa.agent.<id>.plist" \
 
 Verify it's gone with `launchctl list | grep lisa` (should print nothing).
 
-**Testing a macOS agent in a throwaway VM.** Because the macOS installer
-registers a `KeepAlive` LaunchAgent, test it inside a disposable VM, not on your
-own Mac. On Apple Silicon, `scripts/tart-agent-test.sh <agent-id>` spins up a
-fresh [tart](https://tart.run) macOS VM, runs the installer there, and verifies
-the agent registered with launchd; `scripts/tart-agent-test.sh --cleanup` tears
-the VM down again. See the script header for options.
+**Testing a macOS agent in a throwaway VM (developers only).** This is for us
+working on LISA, not for operators deploying to a range — an operator's "clean
+macOS" is just one of their own range hosts. Because the macOS installer
+registers a `KeepAlive` LaunchAgent that starts at login and restarts itself, you
+don't want to run it on your day-to-day Mac while hacking on the installer: it
+drives real apps and litters `~/Library`, and cleanup is manual. On Apple
+Silicon, `scripts/tart-agent-test.sh <agent-id>` spins up a fresh
+[tart](https://tart.run) macOS VM, runs the installer there, and verifies the
+agent registered with launchd; `scripts/tart-agent-test.sh --cleanup` tears the
+VM down again. See the script header for options. (tart's base image is a large,
+one-time ~40 GB download — another reason it's a dev tool, not a deployment
+requirement.)
 
 ### Windows
 
