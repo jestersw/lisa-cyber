@@ -14,6 +14,7 @@ from app.api.endpoints import (
     events,
     generate,
     heartbeat,
+    live,
     meta,
     ml,
     roles,
@@ -62,6 +63,7 @@ app.include_router(
 app.include_router(deploy.router, prefix="/api", tags=["Deployment"], dependencies=_operator)
 app.include_router(diagnose.router, prefix="/api", tags=["Diagnostics"], dependencies=_operator)
 app.include_router(meta.router, prefix="/api", tags=["Meta"], dependencies=_operator)
+app.include_router(live.router, prefix="/api", tags=["Live view"], dependencies=_operator)
 
 # Mixed routers (agent token + operator): guarded per-route inside the module.
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
