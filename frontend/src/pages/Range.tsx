@@ -9,9 +9,7 @@ const MAX_FEED = 200;
 // How many recent events the chain groups into app sessions.
 const CHAIN_LEN = 80;
 // Approx width (px) of one spine column incl. its gap; drives serpentine wrap.
-const COL_W = 132;
-// Branches shown per session before collapsing into a "+N" chip.
-const MAX_BRANCHES = 4;
+const COL_W = 184;
 
 // Map an activity type to a colour class. app_open/app_close/idle are the
 // lifecycle events; the rest are the OS-level categories the agent reports.
@@ -51,6 +49,27 @@ function detailOf(ev: LiveEvent): string | null {
   if (typeof ctx.activity === "string") return ctx.activity;
   if (typeof ctx.reason === "string") return ctx.reason;
   return null;
+}
+
+// A plain-language description of one event, for the "now" strip and tooltips.
+function describe(ev: LiveEvent): string {
+  const detail = detailOf(ev);
+  switch (ev.activity_type) {
+    case "app_open":
+      return `opened ${ev.app}`;
+    case "app_close":
+      return `closed ${ev.app}`;
+    case "network":
+      return `network request${detail ? ` → ${detail}` : ""}`;
+    case "file":
+      return `file ${detail ?? "activity"}`;
+    case "input":
+      return `typing in ${ev.app}`;
+    case "idle":
+      return "stepped away";
+    default:
+      return `${ev.activity_type} in ${ev.app}`;
+  }
 }
 
 interface Branch {
@@ -160,6 +179,16 @@ export function Range() {
   const newestId = sessions.length ? sessions[sessions.length - 1].id : null;
   const rows = chunk(sessions, cols);
 
+  // "What's happening now": the latest event per online agent, so the operator
+  // can read the current state as a sentence instead of decoding the chain.
+  const latestByAgent = new Map<string, LiveEvent>();
+  for (const ev of events) {
+    if (ev.agent_id && !latestByAgent.has(ev.agent_id)) latestByAgent.set(ev.agent_id, ev);
+  }
+  const nowRows = fleet
+    .filter((a) => isFresh(a.last_seen))
+    .map((a) => ({ agent: a, last: latestByAgent.get(a.agent_id) ?? null }));
+
   useEffect(() => {
     const el = spineRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -212,7 +241,30 @@ export function Range() {
         </div>
       )}
 
+      <h2 className="section-title">What's happening now</h2>
+      {nowRows.length === 0 ? (
+        <p className="empty">No agent is active right now.</p>
+      ) : (
+        <ul className="now-strip">
+          {nowRows.map(({ agent, last }) => (
+            <li className="now-row" key={agent.agent_id}>
+              <span className="now-dot" />
+              <Link to={`/agents/${agent.agent_id}`} className="now-agent">
+                {agent.agent_id}
+              </Link>
+              <span className="now-app">{agent.current_app ?? last?.app ?? "idle"}</span>
+              <span className="now-doing">{last ? describe(last) : "waiting…"}</span>
+              {last?.timestamp && <span className="now-time mono">{clock(last.timestamp)}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
       <h2 className="section-title">Activity chain</h2>
+      <p className="chain-hint">
+        Each node is an app session; the actions inside it branch below. The chain fills a row,
+        then drops down and runs back the other way. The highlighted node is where the agent is now.
+      </p>
       <div className="spine" ref={spineRef}>
         {sessions.length === 0 ? (
           <p className="empty">Waiting for activity… the chain builds as agents open apps and work.</p>
@@ -226,33 +278,40 @@ export function Range() {
             return (
               <div className={`spine-row${turn}`} key={r}>
                 {r > 0 && <span className="spine-turn" />}
-                {cells.map((s, i) => (
-                  <div className={`spine-col${s.id === newestId ? " newest" : ""}`} key={s.id}>
-                    {i > 0 && <span className="spine-link" />}
-                    <div className="spine-node ev-open">
-                      <span className="spine-glyph">▸</span>
+                {cells.map((s, i) => {
+                  const current = s.id === newestId;
+                  return (
+                    <div className={`spine-col${current ? " newest" : ""}`} key={s.id}>
+                      {i > 0 && <span className="spine-link" />}
+                      {current && <span className="now-badge">● NOW</span>}
+                      <div className="spine-node ev-open">
+                        <span className="spine-glyph">▸</span>
+                      </div>
+                      <div className="spine-app" title={s.app}>
+                        {s.app}
+                      </div>
+                      <div className="spine-sub">
+                        {s.agent ?? "?"} · {clock(s.time)}
+                        {!s.closed && <span className="spine-live"> · live</span>}
+                      </div>
+                      <div className="spine-branches">
+                        {s.branches.length === 0 && (
+                          <div className="branch empty-branch">no actions yet</div>
+                        )}
+                        {s.branches.map((b) => (
+                          <div
+                            className={`branch ${CATEGORY_CLASS[b.kind] ?? "ev-process"}`}
+                            key={b.id}
+                          >
+                            <span className="branch-dot" />
+                            <span className="branch-kind">{b.kind}</span>
+                            {b.detail && <span className="branch-detail">{b.detail}</span>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="spine-app">{s.app}</div>
-                    <div className="spine-sub">
-                      {s.agent ?? "?"} · {clock(s.time)}
-                    </div>
-                    <div className="spine-branches">
-                      {s.branches.slice(0, MAX_BRANCHES).map((b) => (
-                        <div
-                          className={`branch ${CATEGORY_CLASS[b.kind] ?? "ev-process"}`}
-                          key={b.id}
-                        >
-                          <span className="branch-dot" />
-                          <span className="branch-kind">{b.kind}</span>
-                          {b.detail && <span className="branch-detail mono">{b.detail}</span>}
-                        </div>
-                      ))}
-                      {s.branches.length > MAX_BRANCHES && (
-                        <div className="branch more">+{s.branches.length - MAX_BRANCHES}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })
