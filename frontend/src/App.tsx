@@ -11,6 +11,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
 import { MlStatus } from "./pages/MlStatus";
+import { Range } from "./pages/Range";
 import { Roles } from "./pages/Roles";
 
 export function App() {
@@ -33,6 +34,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/range" element={<Range />} />
           <Route path="/agents" element={<AgentList />} />
           <Route path="/agents/create" element={<AgentCreate />} />
           <Route path="/agents/:agentId" element={<AgentDetail />} />

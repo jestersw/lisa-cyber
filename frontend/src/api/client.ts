@@ -161,6 +161,33 @@ export interface Meta {
   buildable_os: string[];
 }
 
+export interface FleetAgent {
+  agent_id: string;
+  name: string;
+  role: string | null;
+  os_type: string;
+  status: string;
+  current_app: string | null;
+  last_seen: string | null;
+}
+
+export interface LiveEvent {
+  id: number;
+  agent_id: string | null;
+  name: string | null;
+  app: string;
+  activity_type: string;
+  role: string | null;
+  duration_seconds: number | null;
+  context: Record<string, unknown> | null;
+  timestamp: string | null;
+}
+
+export interface LiveEventsResponse {
+  events: LiveEvent[];
+  latest_id: number | null;
+}
+
 
 export interface AgentStatus {
   agent: {
@@ -300,6 +327,12 @@ export const endpoints = {
   mlStatus: () => api.get<MlStatus>("/api/ml/status"),
   mlReload: () => api.post<{ reloaded: boolean }>("/api/ml/reload", {}),
   meta: () => api.get<Meta>("/api/meta"),
+  liveFleet: () => api.get<{ agents: FleetAgent[] }>("/api/live/fleet"),
+  liveEvents: (after?: number | null, limit = 50) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (after != null) params.set("after", String(after));
+    return api.get<LiveEventsResponse>(`/api/live/events?${params.toString()}`);
+  },
   agents: () => api.get<Agent[]>("/api/agents"),
   agentStatus: (agentId: string) => api.get<AgentStatus>(`/api/agents/${agentId}/status`),
   agentHeartbeats: (agentId: string) => api.get<HeartbeatLog>(`/api/agents/${agentId}/heartbeats`),
