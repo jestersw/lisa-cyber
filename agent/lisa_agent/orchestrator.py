@@ -48,7 +48,7 @@ class Agent:
         switch_pause_range: tuple[int, int] = (5, 20),
         inactive_period_range: tuple[int, int] = (10, 20),
         focus_probability: float = 0.35,
-        glance_probability: float = 0.15,
+        glance_probability: float = 0.3,
         transition_model: dict | None = None,
         next_app_provider: Callable[[list[Application], Application | None], Application | None]
         | None = None,
