@@ -994,11 +994,11 @@
   font-style: italic;
 }
 
-/* ── Activity chain: spine with branches, serpentine wrap ────────────── */
+/* ── Activity chain: flat nodes, serpentine wrap ─────────────────────── */
 
-.spine {
+.chain {
   margin-top: var(--space-md);
-  max-height: 520px;
+  max-height: 560px;
   overflow-y: auto;
   padding: var(--space-lg) var(--space-md);
   border: 1px solid rgba(155, 186, 205, 0.14);
@@ -1006,24 +1006,24 @@
   scroll-behavior: smooth;
 }
 
-.spine-row {
+.chain-row {
   position: relative;
   display: flex;
   align-items: flex-start;
-  margin-top: 40px; /* room for the turn connector dropping in from above */
+  margin-top: 44px; /* room for the turn connector dropping in from above */
 }
 
-.spine-row:first-child {
+.chain-row:first-child {
   margin-top: 0;
 }
 
-/* The vertical connector that carries the chain down into this row, on the
-   side where the previous row ended (serpentine turn). */
-.spine-turn {
+/* Vertical connector that carries the chain down into this row, on the side
+   where the previous row ended (the serpentine turn). */
+.chain-turn {
   position: absolute;
-  top: -40px;
+  top: -44px;
   width: 2px;
-  height: 40px;
+  height: 44px;
   background: linear-gradient(
     180deg,
     rgba(155, 186, 205, 0.15),
@@ -1031,58 +1031,37 @@
     rgba(155, 186, 205, 0.15)
   );
   background-size: 100% 200%;
-  animation: spine-flow-v 1.6s linear infinite;
+  animation: chain-flow-v 1.6s linear infinite;
 }
 
-.spine-row.turn-left .spine-turn {
-  left: 45px; /* ~centre of the leftmost column's node */
+.chain-row.turn-left .chain-turn {
+  left: 51px; /* ~centre of the leftmost node */
 }
 
-.spine-row.turn-right .spine-turn {
-  right: 45px;
+.chain-row.turn-right .chain-turn {
+  right: 51px;
 }
 
-.spine-col {
+.chain-step {
   position: relative;
   flex: none;
-  width: 148px;
+  width: 104px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: spine-in 0.45s ease both;
+  animation: chain-in 0.45s ease both;
 }
 
-/* The agent's current session — make "you are here" obvious. */
-.spine-col.newest {
-  background: rgba(1, 102, 156, 0.12);
-  outline: 1px solid rgba(1, 102, 156, 0.4);
-  border-radius: var(--radius-md);
-}
-
-.now-badge {
-  position: absolute;
-  top: -10px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  background: var(--bg);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(1, 102, 156, 0.5);
-  z-index: 2;
-}
-
-.spine-col:not(:first-child) {
-  margin-left: 36px;
+.chain-step:not(:first-child) {
+  margin-left: 44px;
 }
 
 /* Horizontal connector back to the previous node in the row. */
-.spine-link {
+.chain-link {
   position: absolute;
-  top: 20px;
-  left: -36px;
-  width: 36px;
+  top: 21px;
+  left: -44px;
+  width: 44px;
   height: 2px;
   background: linear-gradient(
     90deg,
@@ -1091,12 +1070,12 @@
     rgba(155, 186, 205, 0.15)
   );
   background-size: 200% 100%;
-  animation: spine-flow-h 1.6s linear infinite;
+  animation: chain-flow-h 1.6s linear infinite;
 }
 
-.spine-node {
-  width: 40px;
-  height: 40px;
+.chain-node {
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1106,96 +1085,51 @@
   z-index: 1;
 }
 
-.spine-glyph {
-  font-size: 16px;
+.chain-glyph {
+  font-size: 18px;
   line-height: 1;
 }
 
-.spine-col.newest .spine-node {
+.chain-step.newest .chain-node {
   animation: chain-pulse 1.6s ease-out infinite;
 }
 
-.spine-app {
-  margin-top: 8px;
+.chain-label {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  max-width: 104px;
+}
+
+.chain-app {
   color: var(--white);
   font-size: 13px;
   font-weight: 500;
-  max-width: 148px;
-  text-align: center;
   overflow-wrap: anywhere;
 }
 
-.spine-sub {
+.chain-kind {
   font-size: 10px;
-  color: rgba(155, 186, 205, 0.6);
-  max-width: 148px;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-
-.spine-live {
-  color: var(--accent);
-}
-
-/* Branches hang below the app node — the activities done inside the session. */
-.spine-branches {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-
-.branch {
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
-  font-size: 11px;
-  line-height: 1.35;
-  padding-left: 12px;
-  position: relative;
-  width: 100%;
-}
-
-/* A little elbow tying each branch back to the spine node above. */
-.branch::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: -4px;
-  width: 6px;
-  height: 11px;
-  border-left: 2px solid rgba(155, 186, 205, 0.25);
-  border-bottom: 2px solid rgba(155, 186, 205, 0.25);
-  border-bottom-left-radius: 4px;
-}
-
-.branch-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: none;
-  margin-top: 4px;
-}
-
-.branch-kind {
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex: none;
+  letter-spacing: 0.06em;
+  color: var(--light);
 }
 
-.branch-detail {
+.chain-detail {
+  font-size: 11px;
   color: var(--light);
   overflow-wrap: anywhere;
 }
 
-.empty-branch {
-  color: rgba(155, 186, 205, 0.5);
-  font-style: italic;
+.chain-who {
+  font-size: 10px;
+  color: rgba(155, 186, 205, 0.6);
 }
 
-@keyframes spine-in {
+@keyframes chain-in {
   from {
     opacity: 0;
     transform: translateY(-10px);
@@ -1206,7 +1140,7 @@
   }
 }
 
-@keyframes spine-flow-h {
+@keyframes chain-flow-h {
   from {
     background-position: 200% 0;
   }
@@ -1215,7 +1149,7 @@
   }
 }
 
-@keyframes spine-flow-v {
+@keyframes chain-flow-v {
   from {
     background-position: 0 200%;
   }
@@ -1237,14 +1171,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spine-col,
-  .spine-link,
-  .spine-turn,
-  .spine-col.newest .spine-node {
+  .chain-step,
+  .chain-link,
+  .chain-turn,
+  .chain-step.newest .chain-node {
     animation: none;
   }
 }
-
 /* ── "What's happening now" strip ────────────────────────────────────── */
 
 .now-strip {
@@ -1301,11 +1234,4 @@
   margin-left: auto;
   color: rgba(155, 186, 205, 0.6);
   font-size: 12px;
-}
-
-.chain-hint {
-  margin-top: var(--space-xs);
-  color: var(--light);
-  font-size: 13px;
-  max-width: 70ch;
 }
