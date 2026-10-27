@@ -6,6 +6,8 @@ const POLL_MS = 3000;
 // How long after the last heartbeat we still consider an agent "online".
 const FRESH_MS = 2 * 60 * 1000;
 const MAX_FEED = 200;
+// How many recent steps the animated chain shows.
+const CHAIN_LEN = 40;
 
 // Map an activity type to a feed colour class. app_open/app_close/idle are the
 // lifecycle events; the rest are the OS-level categories the agent reports.
@@ -17,6 +19,17 @@ const CATEGORY_CLASS: Record<string, string> = {
   app_open: "ev-open",
   app_close: "ev-close",
   idle: "ev-idle",
+};
+
+// A compact glyph per category so each step in the chain reads at a glance.
+const CATEGORY_GLYPH: Record<string, string> = {
+  network: "↗",
+  file: "▤",
+  input: "⌨",
+  process: "⚙",
+  app_open: "▸",
+  app_close: "▪",
+  idle: "‖",
 };
 
 function isFresh(lastSeen: string | null): boolean {
@@ -52,6 +65,7 @@ export function Range() {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const cursor = useRef<number | null>(null);
+  const chainRef = useRef<HTMLDivElement | null>(null);
 
   const poll = useCallback(() => {
     endpoints
@@ -77,7 +91,15 @@ export function Range() {
     return () => clearInterval(timer);
   }, [poll]);
 
+  // Keep the newest step of the chain in view as it grows to the right.
+  useEffect(() => {
+    const el = chainRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [events]);
+
   const online = fleet.filter((a) => isFresh(a.last_seen)).length;
+  // Oldest -> newest, left -> right; the newest node animates in on the right.
+  const chain = events.slice(0, CHAIN_LEN).reverse();
 
   return (
     <main className="page">
@@ -119,6 +141,35 @@ export function Range() {
                   <span>{ago(a.last_seen)}</span>
                 </div>
               </Link>
+            );
+          })}
+        </div>
+      )}
+
+      <h2 className="section-title">Activity chain</h2>
+      {chain.length === 0 ? (
+        <p className="empty">Waiting for activity… the chain builds as agents act.</p>
+      ) : (
+        <div className="chain" ref={chainRef}>
+          {chain.map((ev, i) => {
+            const detail = detailOf(ev);
+            const cls = CATEGORY_CLASS[ev.activity_type] ?? "ev-process";
+            const newest = i === chain.length - 1;
+            return (
+              <div key={ev.id} className={`chain-step${newest ? " newest" : ""}`}>
+                {i > 0 && <span className="chain-link" />}
+                <div className={`chain-node ${cls}`}>
+                  <span className="chain-glyph">{CATEGORY_GLYPH[ev.activity_type] ?? "•"}</span>
+                </div>
+                <div className="chain-label">
+                  <span className="chain-app">{ev.app}</span>
+                  <span className="chain-kind">{ev.activity_type}</span>
+                  {detail && <span className="chain-detail mono">{detail}</span>}
+                  <span className="chain-who">
+                    {ev.agent_id ?? "?"} · {clock(ev.timestamp)}
+                  </span>
+                </div>
+              </div>
             );
           })}
         </div>

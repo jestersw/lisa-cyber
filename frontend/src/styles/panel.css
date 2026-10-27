@@ -993,3 +993,152 @@
   border-color: rgba(155, 186, 205, 0.18);
   font-style: italic;
 }
+
+/* ── Activity chain (animated) ───────────────────────────────────────── */
+
+.chain {
+  margin-top: var(--space-md);
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: var(--space-lg) var(--space-md);
+  border: 1px solid rgba(155, 186, 205, 0.14);
+  border-radius: var(--radius-md);
+  scroll-behavior: smooth;
+}
+
+.chain-step {
+  position: relative;
+  flex: none;
+  width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: chain-in 0.45s ease both;
+}
+
+.chain-step:not(:first-child) {
+  margin-left: 44px;
+}
+
+/* The connector line reaching back to the previous node, with a gradient
+   that flows left-to-right so the chain feels alive. */
+.chain-link {
+  position: absolute;
+  top: 21px;
+  left: -44px;
+  width: 44px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(155, 186, 205, 0.15),
+    var(--accent),
+    rgba(155, 186, 205, 0.15)
+  );
+  background-size: 200% 100%;
+  animation: chain-flow 1.6s linear infinite;
+}
+
+.chain-node {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* colour + border come from the ev-* category class on the same element;
+     currentColor keeps the ring matched to the glyph. */
+  border: 2px solid currentColor;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.chain-glyph {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.chain-step.newest .chain-node {
+  animation: chain-pulse 1.6s ease-out infinite;
+}
+
+.chain-label {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  max-width: 104px;
+}
+
+.chain-app {
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 104px;
+}
+
+.chain-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--light);
+}
+
+.chain-detail {
+  font-size: 11px;
+  color: var(--light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 104px;
+}
+
+.chain-who {
+  font-size: 10px;
+  color: rgba(155, 186, 205, 0.6);
+}
+
+@keyframes chain-in {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chain-flow {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@keyframes chain-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(1, 102, 156, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(1, 102, 156, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(1, 102, 156, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chain-step,
+  .chain-link,
+  .chain-step.newest .chain-node {
+    animation: none;
+  }
+}
