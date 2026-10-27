@@ -47,6 +47,8 @@ class Agent:
         session_max: int = 1800,
         switch_pause_range: tuple[int, int] = (5, 20),
         inactive_period_range: tuple[int, int] = (10, 20),
+        focus_probability: float = 0.35,
+        glance_probability: float = 0.15,
         transition_model: dict | None = None,
         next_app_provider: Callable[[list[Application], Application | None], Application | None]
         | None = None,
@@ -64,6 +66,14 @@ class Agent:
         self.session_max = session_max
         self.switch_pause_range = switch_pause_range
         self.inactive_period_range = inactive_period_range
+        # Work-cycle branching: within a session the agent sometimes settles into
+        # a focus burst (several activities in quick succession) or glances at
+        # another app and comes straight back. Both produce real events, so the
+        # activity chain shows richer, branching behaviour instead of a flat
+        # one-activity-per-tick line. Probabilities are per work step; the
+        # remainder is an ordinary single activity.
+        self.focus_probability = focus_probability
+        self.glance_probability = glance_probability
         # Optional markov model that drives pick_next_app when present.
         # See docs/agent-config-schema.md for the format; agent uses only
         # `counts` — `trained_on` and `version` are for operator debugging.
@@ -211,10 +221,53 @@ class Agent:
                     self.sleep(5)  # give the app time to open
 
             if self.current_app is not None:
-                self.engine.perform_activity(self.current_app)
-                self._interruptible_sleep(self.rng.randint(5, 30))
+                self._work_step()
             else:
                 self.sleep(5)
+
+    def _work_step(self) -> None:
+        """Do one unit of work on the current app, with branching.
+
+        Rolls once per step: a focus burst (several activities back-to-back), a
+        glance at another app and back, or — most often — a single activity.
+        Each branch drives real engine calls, so the activity chain reflects the
+        shape of the work rather than a uniform drip of events.
+        """
+        app = self.current_app
+        if app is None:
+            self.sleep(5)
+            return
+
+        roll = self.rng.random()
+        if roll < self.glance_probability and len(self.apps) > 1:
+            self._glance()
+        elif roll < self.glance_probability + self.focus_probability:
+            # Focus burst: a short run of activities with tight gaps.
+            for _ in range(self.rng.randint(2, 4)):
+                if not self.running:
+                    return
+                self.engine.perform_activity(app)
+                self._interruptible_sleep(self.rng.randint(2, 8))
+        else:
+            self.engine.perform_activity(app)
+            self._interruptible_sleep(self.rng.randint(5, 30))
+
+    def _glance(self) -> None:
+        """Briefly open another app, do one thing, and return to the current one.
+
+        A quick context-switch (check chat, glance at a browser tab) that leaves
+        the current app unchanged — it shows up as a short branch off the main
+        chain rather than a full session switch.
+        """
+        others = [a for a in self.apps if a is not self.current_app]
+        if not others:
+            self.engine.perform_activity(self.current_app)
+            return
+        other = self.rng.choice(others)
+        if self.engine.open_app(other):
+            self.engine.perform_activity(other)
+            self.engine.close_app(other)
+        self._interruptible_sleep(self.rng.randint(3, 10))
 
     def _shutdown(self) -> None:
         log.info("Shutting down")

@@ -78,7 +78,15 @@ class FakeMutex:
         self.released = True
 
 
-def make_agent(clock, *, stop_after_ticks=None, apps=None, schedule=None, next_app_provider=None):
+def make_agent(
+    clock,
+    *,
+    stop_after_ticks=None,
+    apps=None,
+    schedule=None,
+    next_app_provider=None,
+    **agent_kwargs,
+):
     apps = apps or [
         Application("editor", open_cmd="x"),
         Application("browser", open_cmd="y"),
@@ -110,6 +118,7 @@ def make_agent(clock, *, stop_after_ticks=None, apps=None, schedule=None, next_a
         switch_pause_range=(0, 0),
         inactive_period_range=(1000, 1000),  # effectively disabled in short tests
         next_app_provider=next_app_provider,
+        **agent_kwargs,
     )
     return agent, engine, heartbeat, mutex
 
@@ -206,13 +215,57 @@ def test_next_app_provider_drives_selection():
         return next(a for a in available if a.name == "browser")
 
     agent, engine, _hb, _mutex = make_agent(
-        clock, stop_after_ticks=4, apps=apps, next_app_provider=provider
+        clock,
+        stop_after_ticks=4,
+        apps=apps,
+        next_app_provider=provider,
+        glance_probability=0,  # isolate switch selection from glance excursions
     )
     agent.start()
 
     assert calls["n"] >= 1
     assert "browser" in engine.opened
     assert "editor" not in engine.opened
+
+
+def test_focus_burst_runs_several_activities():
+    # Force the focus branch (glance off, focus certain): one work step should
+    # perform multiple activities back-to-back. Drive one work step directly
+    # (the tick-based stop in start() can't exercise a multi-activity burst).
+    clock = FakeClock(dt(2024, 1, 8, 10, 0))  # Monday, working hours
+    agent, engine, _hb, _mutex = make_agent(
+        clock,
+        apps=[Application("editor", open_cmd="x")],
+        glance_probability=0.0,
+        focus_probability=1.0,
+    )
+    agent.running = True
+    agent._interruptible_sleep = lambda *_: None  # don't busy-wait in the test
+    agent.current_app = agent.apps[0]
+    agent._work_step()
+    # A burst performs 2-4 activities in one step, vs 1 for an ordinary step.
+    assert engine.activities >= 2
+
+
+def test_glance_opens_another_app_without_switching():
+    # Force the glance branch: the agent opens the other app, acts, closes it,
+    # and the current app is unchanged.
+    clock = FakeClock(dt(2024, 1, 8, 10, 0))
+    apps = [Application("editor", open_cmd="x"), Application("browser", open_cmd="y")]
+    agent, engine, _hb, _mutex = make_agent(
+        clock,
+        apps=apps,
+        glance_probability=1.0,
+        focus_probability=0.0,
+    )
+    agent.running = True
+    agent._interruptible_sleep = lambda *_: None
+    agent.current_app = apps[0]  # editor
+    agent._work_step()
+    assert "browser" in engine.opened  # the glance opened the other app
+    assert "browser" in engine.closed  # and closed it again
+    assert engine.activities >= 1
+    assert agent.current_app is apps[0]  # the session did not switch
 
 
 def test_falls_back_locally_when_provider_returns_none():
