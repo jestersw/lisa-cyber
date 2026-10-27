@@ -6,10 +6,10 @@ const POLL_MS = 3000;
 // How long after the last heartbeat we still consider an agent "online".
 const FRESH_MS = 2 * 60 * 1000;
 const MAX_FEED = 200;
-// How many recent events the chain groups into app sessions.
-const CHAIN_LEN = 80;
-// Approx width (px) of one spine column incl. its gap; drives serpentine wrap.
-const COL_W = 184;
+// How many recent events the chain shows.
+const CHAIN_LEN = 60;
+// Approx width (px) of one chain step incl. its gap; drives the serpentine wrap.
+const COL_W = 148;
 
 // Map an activity type to a colour class. app_open/app_close/idle are the
 // lifecycle events; the rest are the OS-level categories the agent reports.
@@ -21,6 +21,17 @@ const CATEGORY_CLASS: Record<string, string> = {
   app_open: "ev-open",
   app_close: "ev-close",
   idle: "ev-idle",
+};
+
+// A compact glyph per category so each step reads at a glance.
+const CATEGORY_GLYPH: Record<string, string> = {
+  network: "↗",
+  file: "▤",
+  input: "⌨",
+  process: "⚙",
+  app_open: "▸",
+  app_close: "▪",
+  idle: "‖",
 };
 
 function isFresh(lastSeen: string | null): boolean {
@@ -70,58 +81,6 @@ function describe(ev: LiveEvent): string {
     default:
       return `${ev.activity_type} in ${ev.app}`;
   }
-}
-
-interface Branch {
-  id: number;
-  kind: string;
-  detail: string | null;
-}
-
-interface Session {
-  id: number;
-  app: string;
-  agent: string | null;
-  time: string | null;
-  branches: Branch[];
-  closed: boolean;
-}
-
-// Fold the flat event stream into app sessions: an app_open starts a session,
-// the activities inside it hang off as branches, and app_close ends it. This is
-// what turns the chain from a flat line into a spine-with-branches.
-function buildSessions(evs: LiveEvent[]): Session[] {
-  const sessions: Session[] = [];
-  let cur: Session | null = null;
-  for (const ev of evs) {
-    if (ev.activity_type === "app_open") {
-      cur = { id: ev.id, app: ev.app, agent: ev.agent_id, time: ev.timestamp, branches: [], closed: false };
-      sessions.push(cur);
-    } else if (ev.activity_type === "app_close") {
-      if (cur && cur.app === ev.app) {
-        cur.closed = true;
-        cur = null;
-      }
-    } else {
-      const branch: Branch = { id: ev.id, kind: ev.activity_type, detail: detailOf(ev) };
-      if (cur) {
-        cur.branches.push(branch);
-      } else {
-        // Activity before we saw an open (chain starts mid-session): start a
-        // loose session so nothing is dropped.
-        cur = {
-          id: ev.id,
-          app: ev.app,
-          agent: ev.agent_id,
-          time: ev.timestamp,
-          branches: [branch],
-          closed: false,
-        };
-        sessions.push(cur);
-      }
-    }
-  }
-  return sessions;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -175,9 +134,9 @@ export function Range() {
   }, []);
 
   // Oldest -> newest. Keep the newest row in view as the chain grows downward.
-  const sessions = buildSessions(events.slice(0, CHAIN_LEN).reverse());
-  const newestId = sessions.length ? sessions[sessions.length - 1].id : null;
-  const rows = chunk(sessions, cols);
+  const chain = events.slice(0, CHAIN_LEN).reverse();
+  const newestId = chain.length ? chain[chain.length - 1].id : null;
+  const rows = chunk(chain, cols);
 
   // "What's happening now": the latest event per online agent, so the operator
   // can read the current state as a sentence instead of decoding the chain.
@@ -261,53 +220,40 @@ export function Range() {
       )}
 
       <h2 className="section-title">Activity chain</h2>
-      <p className="chain-hint">
-        Each node is an app session; the actions inside it branch below. The chain fills a row,
-        then drops down and runs back the other way. The highlighted node is where the agent is now.
-      </p>
-      <div className="spine" ref={spineRef}>
-        {sessions.length === 0 ? (
-          <p className="empty">Waiting for activity… the chain builds as agents open apps and work.</p>
+      <div className="chain" ref={spineRef}>
+        {chain.length === 0 ? (
+          <p className="empty">Waiting for activity… the chain builds as agents act.</p>
         ) : (
           rows.map((row, r) => {
             // Serpentine: even rows run left→right, odd rows right→left, so the
-            // chain snakes down the page instead of scrolling away.
+            // chain snakes down the page (> > > ⬇ < < <) instead of scrolling off.
             const reversed = r % 2 === 1;
             const cells = reversed ? [...row].reverse() : row;
             const turn = r === 0 ? "" : reversed ? " turn-right" : " turn-left";
             return (
-              <div className={`spine-row${turn}`} key={r}>
-                {r > 0 && <span className="spine-turn" />}
-                {cells.map((s, i) => {
-                  const current = s.id === newestId;
+              <div className={`chain-row${turn}`} key={r}>
+                {r > 0 && <span className="chain-turn" />}
+                {cells.map((ev, i) => {
+                  const detail = detailOf(ev);
+                  const cls = CATEGORY_CLASS[ev.activity_type] ?? "ev-process";
                   return (
-                    <div className={`spine-col${current ? " newest" : ""}`} key={s.id}>
-                      {i > 0 && <span className="spine-link" />}
-                      {current && <span className="now-badge">● NOW</span>}
-                      <div className="spine-node ev-open">
-                        <span className="spine-glyph">▸</span>
+                    <div
+                      className={`chain-step${ev.id === newestId ? " newest" : ""}`}
+                      key={ev.id}
+                    >
+                      {i > 0 && <span className="chain-link" />}
+                      <div className={`chain-node ${cls}`}>
+                        <span className="chain-glyph">
+                          {CATEGORY_GLYPH[ev.activity_type] ?? "•"}
+                        </span>
                       </div>
-                      <div className="spine-app" title={s.app}>
-                        {s.app}
-                      </div>
-                      <div className="spine-sub">
-                        {s.agent ?? "?"} · {clock(s.time)}
-                        {!s.closed && <span className="spine-live"> · live</span>}
-                      </div>
-                      <div className="spine-branches">
-                        {s.branches.length === 0 && (
-                          <div className="branch empty-branch">no actions yet</div>
-                        )}
-                        {s.branches.map((b) => (
-                          <div
-                            className={`branch ${CATEGORY_CLASS[b.kind] ?? "ev-process"}`}
-                            key={b.id}
-                          >
-                            <span className="branch-dot" />
-                            <span className="branch-kind">{b.kind}</span>
-                            {b.detail && <span className="branch-detail">{b.detail}</span>}
-                          </div>
-                        ))}
+                      <div className="chain-label">
+                        <span className="chain-app">{ev.app}</span>
+                        <span className="chain-kind">{ev.activity_type}</span>
+                        {detail && <span className="chain-detail">{detail}</span>}
+                        <span className="chain-who">
+                          {ev.agent_id ?? "?"} · {clock(ev.timestamp)}
+                        </span>
                       </div>
                     </div>
                   );
