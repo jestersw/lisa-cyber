@@ -6,10 +6,14 @@ const POLL_MS = 3000;
 // How long after the last heartbeat we still consider an agent "online".
 const FRESH_MS = 2 * 60 * 1000;
 const MAX_FEED = 200;
-// How many recent steps the animated chain shows.
-const CHAIN_LEN = 40;
+// How many recent events the chain groups into app sessions.
+const CHAIN_LEN = 80;
+// Approx width (px) of one spine column incl. its gap; drives serpentine wrap.
+const COL_W = 132;
+// Branches shown per session before collapsing into a "+N" chip.
+const MAX_BRANCHES = 4;
 
-// Map an activity type to a feed colour class. app_open/app_close/idle are the
+// Map an activity type to a colour class. app_open/app_close/idle are the
 // lifecycle events; the rest are the OS-level categories the agent reports.
 const CATEGORY_CLASS: Record<string, string> = {
   network: "ev-network",
@@ -19,17 +23,6 @@ const CATEGORY_CLASS: Record<string, string> = {
   app_open: "ev-open",
   app_close: "ev-close",
   idle: "ev-idle",
-};
-
-// A compact glyph per category so each step in the chain reads at a glance.
-const CATEGORY_GLYPH: Record<string, string> = {
-  network: "↗",
-  file: "▤",
-  input: "⌨",
-  process: "⚙",
-  app_open: "▸",
-  app_close: "▪",
-  idle: "‖",
 };
 
 function isFresh(lastSeen: string | null): boolean {
@@ -60,12 +53,71 @@ function detailOf(ev: LiveEvent): string | null {
   return null;
 }
 
+interface Branch {
+  id: number;
+  kind: string;
+  detail: string | null;
+}
+
+interface Session {
+  id: number;
+  app: string;
+  agent: string | null;
+  time: string | null;
+  branches: Branch[];
+  closed: boolean;
+}
+
+// Fold the flat event stream into app sessions: an app_open starts a session,
+// the activities inside it hang off as branches, and app_close ends it. This is
+// what turns the chain from a flat line into a spine-with-branches.
+function buildSessions(evs: LiveEvent[]): Session[] {
+  const sessions: Session[] = [];
+  let cur: Session | null = null;
+  for (const ev of evs) {
+    if (ev.activity_type === "app_open") {
+      cur = { id: ev.id, app: ev.app, agent: ev.agent_id, time: ev.timestamp, branches: [], closed: false };
+      sessions.push(cur);
+    } else if (ev.activity_type === "app_close") {
+      if (cur && cur.app === ev.app) {
+        cur.closed = true;
+        cur = null;
+      }
+    } else {
+      const branch: Branch = { id: ev.id, kind: ev.activity_type, detail: detailOf(ev) };
+      if (cur) {
+        cur.branches.push(branch);
+      } else {
+        // Activity before we saw an open (chain starts mid-session): start a
+        // loose session so nothing is dropped.
+        cur = {
+          id: ev.id,
+          app: ev.app,
+          agent: ev.agent_id,
+          time: ev.timestamp,
+          branches: [branch],
+          closed: false,
+        };
+        sessions.push(cur);
+      }
+    }
+  }
+  return sessions;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
+
 export function Range() {
   const [fleet, setFleet] = useState<FleetAgent[]>([]);
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [cols, setCols] = useState(6);
   const cursor = useRef<number | null>(null);
-  const chainRef = useRef<HTMLDivElement | null>(null);
+  const spineRef = useRef<HTMLDivElement | null>(null);
 
   const poll = useCallback(() => {
     endpoints
@@ -91,15 +143,29 @@ export function Range() {
     return () => clearInterval(timer);
   }, [poll]);
 
-  // Keep the newest step of the chain in view as it grows to the right.
+  // Recompute how many columns fit, so the chain wraps (down, then back) as the
+  // window resizes instead of scrolling off to the right.
   useEffect(() => {
-    const el = chainRef.current;
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, [events]);
+    const el = spineRef.current;
+    if (!el) return;
+    const update = () => setCols(Math.max(1, Math.floor(el.clientWidth / COL_W)));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Oldest -> newest. Keep the newest row in view as the chain grows downward.
+  const sessions = buildSessions(events.slice(0, CHAIN_LEN).reverse());
+  const newestId = sessions.length ? sessions[sessions.length - 1].id : null;
+  const rows = chunk(sessions, cols);
+
+  useEffect(() => {
+    const el = spineRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [events, cols]);
 
   const online = fleet.filter((a) => isFresh(a.last_seen)).length;
-  // Oldest -> newest, left -> right; the newest node animates in on the right.
-  const chain = events.slice(0, CHAIN_LEN).reverse();
 
   return (
     <main className="page">
@@ -113,7 +179,7 @@ export function Range() {
       </div>
       <p className="page-sub">
         Every agent on the range and what it's doing right now — current app from the latest
-        heartbeat, and a live feed of each action as it happens.
+        heartbeat, and a live chain of each action as it happens.
       </p>
 
       {error && <div className="notice error">{error}</div>}
@@ -147,33 +213,51 @@ export function Range() {
       )}
 
       <h2 className="section-title">Activity chain</h2>
-      {chain.length === 0 ? (
-        <p className="empty">Waiting for activity… the chain builds as agents act.</p>
-      ) : (
-        <div className="chain" ref={chainRef}>
-          {chain.map((ev, i) => {
-            const detail = detailOf(ev);
-            const cls = CATEGORY_CLASS[ev.activity_type] ?? "ev-process";
-            const newest = i === chain.length - 1;
+      <div className="spine" ref={spineRef}>
+        {sessions.length === 0 ? (
+          <p className="empty">Waiting for activity… the chain builds as agents open apps and work.</p>
+        ) : (
+          rows.map((row, r) => {
+            // Serpentine: even rows run left→right, odd rows right→left, so the
+            // chain snakes down the page instead of scrolling away.
+            const reversed = r % 2 === 1;
+            const cells = reversed ? [...row].reverse() : row;
+            const turn = r === 0 ? "" : reversed ? " turn-right" : " turn-left";
             return (
-              <div key={ev.id} className={`chain-step${newest ? " newest" : ""}`}>
-                {i > 0 && <span className="chain-link" />}
-                <div className={`chain-node ${cls}`}>
-                  <span className="chain-glyph">{CATEGORY_GLYPH[ev.activity_type] ?? "•"}</span>
-                </div>
-                <div className="chain-label">
-                  <span className="chain-app">{ev.app}</span>
-                  <span className="chain-kind">{ev.activity_type}</span>
-                  {detail && <span className="chain-detail mono">{detail}</span>}
-                  <span className="chain-who">
-                    {ev.agent_id ?? "?"} · {clock(ev.timestamp)}
-                  </span>
-                </div>
+              <div className={`spine-row${turn}`} key={r}>
+                {r > 0 && <span className="spine-turn" />}
+                {cells.map((s, i) => (
+                  <div className={`spine-col${s.id === newestId ? " newest" : ""}`} key={s.id}>
+                    {i > 0 && <span className="spine-link" />}
+                    <div className="spine-node ev-open">
+                      <span className="spine-glyph">▸</span>
+                    </div>
+                    <div className="spine-app">{s.app}</div>
+                    <div className="spine-sub">
+                      {s.agent ?? "?"} · {clock(s.time)}
+                    </div>
+                    <div className="spine-branches">
+                      {s.branches.slice(0, MAX_BRANCHES).map((b) => (
+                        <div
+                          className={`branch ${CATEGORY_CLASS[b.kind] ?? "ev-process"}`}
+                          key={b.id}
+                        >
+                          <span className="branch-dot" />
+                          <span className="branch-kind">{b.kind}</span>
+                          {b.detail && <span className="branch-detail mono">{b.detail}</span>}
+                        </div>
+                      ))}
+                      {s.branches.length > MAX_BRANCHES && (
+                        <div className="branch more">+{s.branches.length - MAX_BRANCHES}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       <h2 className="section-title">Activity feed</h2>
       {events.length === 0 ? (
