@@ -23,6 +23,7 @@ import sys
 from lisa_agent.activity import ActivityEngine, Application
 from lisa_agent.config import Config, WorkSchedule
 from lisa_agent.enroll import resolve_token
+from lisa_agent.events import EventReporter
 from lisa_agent.heartbeat import HeartbeatLoop, HeartbeatSender, build_payload
 from lisa_agent.installer import ensure_all_installed
 from lisa_agent.mutex import make_mutex
@@ -74,7 +75,15 @@ def build_agent(env_config: Config, pkg: DeploymentPackage, auth_token: str | No
     if not usable_apps:
         log.warning("no usable applications after install checks")
 
-    engine = ActivityEngine()
+    # Live activity feed: the engine reports every app open/close and activity
+    # to the backend's events endpoint, which powers the panel's range view and
+    # feeds model retraining (#51) and detection-realism checks (#232). Buffered
+    # and flushed on a background thread, so it never blocks the activity loop.
+    events = EventReporter(
+        url=f"{env_config.backend_url}/api/agents/{identity.agent_id}/events",
+        token=auth_token,
+    )
+    engine = ActivityEngine(on_event=events.record)
 
     # Live next-app source: ask the backend's ML endpoint which app to switch
     # to, falling back to the local model inside the orchestrator when it
@@ -116,6 +125,7 @@ def build_agent(env_config: Config, pkg: DeploymentPackage, auth_token: str | No
         apps=usable_apps,
         engine=engine,
         heartbeat=heartbeat,
+        events=events,
         mutex=mutex,
         session_min=int(behavior.session_duration.min),
         session_max=int(behavior.session_duration.max),

@@ -244,6 +244,86 @@ def test_perform_activity_no_activities():
     assert fake.commands == []
 
 
+# ---------- event emission ----------
+
+
+class RecordingSink:
+    def __init__(self):
+        self.events = []
+
+    def __call__(self, app, activity_type, **kw):
+        self.events.append((app, activity_type, kw))
+
+
+def _engine_with_sink(seed=0):
+    sink = RecordingSink()
+    engine = ActivityEngine(
+        runner=FakeRunner(), rng=random.Random(seed), sleep=lambda _s: None, on_event=sink
+    )
+    return engine, sink
+
+
+def test_open_and_close_emit_events():
+    engine, sink = _engine_with_sink()
+    app = Application.from_dict(PLUGIN)
+    engine.open_app(app)
+    engine.close_app(app)
+    types = [(a, t) for a, t, _ in sink.events]
+    assert ("editor", "app_open") in types
+    assert ("editor", "app_close") in types
+
+
+def test_open_without_cmd_emits_nothing():
+    engine, sink = _engine_with_sink()
+    assert engine.open_app(Application(name="noop")) is False
+    assert sink.events == []
+
+
+def test_close_emits_even_without_close_cmd():
+    engine, sink = _engine_with_sink()
+    engine.close_app(Application(name="plain", open_cmd="x"))
+    assert sink.events == [("plain", "app_close", {})]
+
+
+def test_perform_activity_emits_category_and_name(monkeypatch):
+    monkeypatch.setattr("lisa_agent.activity.current_os", lambda: "linux")
+    engine, sink = _engine_with_sink(seed=1)
+    engine.perform_activity(Application.from_dict(PLUGIN))
+    assert len(sink.events) == 1
+    app, category, kw = sink.events[0]
+    assert app == "editor"
+    assert category in {"process", "file", "network", "input"}
+    assert "activity" in kw["context"]
+
+
+def test_emit_swallows_sink_errors():
+    def boom(*a, **k):
+        raise RuntimeError("sink down")
+
+    engine = ActivityEngine(runner=FakeRunner(), sleep=lambda _s: None, on_event=boom)
+    # A broken sink must not break activity.
+    assert engine.open_app(Application.from_dict(PLUGIN)) is True
+
+
+def test_activity_category_prefers_network_then_file_then_input():
+    from lisa_agent.activity import activity_category
+
+    net = Activity(id="n", name="n", commands=[Command("http_get", url="http://wiki/x")])
+    assert activity_category(net) == ("network", "http://wiki/x")
+
+    host = Activity(id="h", name="h", commands=[Command("tcp", host="db", port=5432)])
+    assert activity_category(host) == ("network", "db:5432")
+
+    f = Activity(id="f", name="f", commands=[Command("write", target="a.txt", dest="b.txt")])
+    assert activity_category(f) == ("file", "a.txt -> b.txt")
+
+    inp = Activity(id="i", name="i", commands=[Command("key", key="a")])
+    assert activity_category(inp) == ("input", None)
+
+    proc = Activity(id="p", name="p", commands=[Command("weird")])
+    assert activity_category(proc) == ("process", None)
+
+
 # ---------- helpers ----------
 
 
