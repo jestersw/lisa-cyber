@@ -135,6 +135,16 @@ class HeartbeatLoop:
             self.last_heartbeat = datetime.now(UTC)
         return ok
 
+    def nudge(self) -> None:
+        """Send a heartbeat as soon as possible, off the caller's thread.
+
+        Called on a state change (e.g. an app switch) so the panel's live view
+        reflects the current app right away instead of waiting out the interval.
+        Runs on a short-lived daemon thread so a slow or unreachable backend can
+        never stall the activity loop.
+        """
+        threading.Thread(target=self.force, daemon=True).start()
+
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:

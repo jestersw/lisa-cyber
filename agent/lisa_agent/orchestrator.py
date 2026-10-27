@@ -138,6 +138,17 @@ class Agent:
             self._lunch_window = pick_lunch(self.schedule, self.rng)
         return self._lunch_window
 
+    def _set_current_app(self, app: Application | None) -> None:
+        """Set the current app and tell the backend right away.
+
+        Nudging the heartbeat on every switch means the panel's live view
+        reflects the current app immediately, instead of waiting out the
+        heartbeat interval (which can be many minutes).
+        """
+        self.current_app = app
+        if self.heartbeat is not None:
+            self.heartbeat.nudge()
+
     def _run_loop(self) -> None:
         while self.running:
             now = self.now()
@@ -147,7 +158,7 @@ class Agent:
             if state == State.OFF:
                 if self.current_app is not None:
                     self.engine.close_app(self.current_app)
-                    self.current_app = None
+                    self._set_current_app(None)
                 self._interruptible_sleep(60)
                 continue
 
@@ -155,7 +166,7 @@ class Agent:
                 if self.current_app is not None:
                     log.info("Lunch time, closing current application")
                     self.engine.close_app(self.current_app)
-                    self.current_app = None
+                    self._set_current_app(None)
                 self._interruptible_sleep(60)
                 continue
 
@@ -194,7 +205,7 @@ class Agent:
                         transition_model=self.transition_model,
                     )
                 if next_app and self.engine.open_app(next_app):
-                    self.current_app = next_app
+                    self._set_current_app(next_app)
                     self.session_started = time.monotonic()
                     self.session_duration = self.rng.randint(self.session_min, self.session_max)
                     self.sleep(5)  # give the app time to open
