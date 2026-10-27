@@ -3,6 +3,7 @@ import { endpoints } from "../api/client";
 
 const links = [
   { to: "/dashboard", label: "Dashboard" },
+  { to: "/range", label: "Range" },
   { to: "/agents", label: "Agents" },
   { to: "/agents/create", label: "New agent" },
   { to: "/roles", label: "Roles" },
