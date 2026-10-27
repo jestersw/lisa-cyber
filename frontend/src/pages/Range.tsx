@@ -89,13 +89,60 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
+// One agent's chain: a flowing line of its events that wraps serpentine-style
+// (left→right, drop down, right→left) so a busy agent stays on screen. Each
+// lane auto-scrolls to its own newest row.
+function ChainLane({ events, cols }: { events: LiveEvent[]; cols: number }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const newestId = events.length ? events[events.length - 1].id : null;
+  const rows = chunk(events, cols);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [events.length, cols]);
+
+  return (
+    <div className="chain" ref={ref}>
+      {rows.map((row, r) => {
+        const reversed = r % 2 === 1;
+        const cells = reversed ? [...row].reverse() : row;
+        const turn = r === 0 ? "" : reversed ? " turn-right" : " turn-left";
+        return (
+          <div className={`chain-row${turn}`} key={r}>
+            {r > 0 && <span className="chain-turn" />}
+            {cells.map((ev, i) => {
+              const detail = detailOf(ev);
+              const cls = CATEGORY_CLASS[ev.activity_type] ?? "ev-process";
+              return (
+                <div className={`chain-step${ev.id === newestId ? " newest" : ""}`} key={ev.id}>
+                  {i > 0 && <span className="chain-link" />}
+                  <div className={`chain-node ${cls}`}>
+                    <span className="chain-glyph">{CATEGORY_GLYPH[ev.activity_type] ?? "•"}</span>
+                  </div>
+                  <div className="chain-label">
+                    <span className="chain-app">{ev.app}</span>
+                    <span className="chain-kind">{ev.activity_type}</span>
+                    {detail && <span className="chain-detail">{detail}</span>}
+                    <span className="chain-who">{clock(ev.timestamp)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Range() {
   const [fleet, setFleet] = useState<FleetAgent[]>([]);
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cols, setCols] = useState(6);
   const cursor = useRef<number | null>(null);
-  const spineRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   const poll = useCallback(() => {
     endpoints
@@ -121,10 +168,10 @@ export function Range() {
     return () => clearInterval(timer);
   }, [poll]);
 
-  // Recompute how many columns fit, so the chain wraps (down, then back) as the
+  // Recompute how many columns fit, so each lane wraps (down, then back) as the
   // window resizes instead of scrolling off to the right.
   useEffect(() => {
-    const el = spineRef.current;
+    const el = wrapRef.current;
     if (!el) return;
     const update = () => setCols(Math.max(1, Math.floor(el.clientWidth / COL_W)));
     update();
@@ -133,25 +180,31 @@ export function Range() {
     return () => ro.disconnect();
   }, []);
 
-  // Oldest -> newest. Keep the newest row in view as the chain grows downward.
-  const chain = events.slice(0, CHAIN_LEN).reverse();
-  const newestId = chain.length ? chain[chain.length - 1].id : null;
-  const rows = chunk(chain, cols);
+  // Group the stream into one chain per agent. `events` is newest-first; take up
+  // to CHAIN_LEN per agent, then reverse to chronological for the lane. Order
+  // lanes by most-recent activity so the busiest agents are on top.
+  const byAgent = new Map<string, LiveEvent[]>();
+  const latestByAgent = new Map<string, LiveEvent>();
+  for (const ev of events) {
+    if (!ev.agent_id) continue;
+    if (!latestByAgent.has(ev.agent_id)) latestByAgent.set(ev.agent_id, ev);
+    const list = byAgent.get(ev.agent_id);
+    if (list) {
+      if (list.length < CHAIN_LEN) list.push(ev);
+    } else {
+      byAgent.set(ev.agent_id, [ev]);
+    }
+  }
+  const fleetById = new Map(fleet.map((a) => [a.agent_id, a]));
+  const lanes = [...byAgent.entries()]
+    .sort((a, b) => (b[1][0]?.id ?? 0) - (a[1][0]?.id ?? 0))
+    .map(([id, list]) => ({ id, agent: fleetById.get(id) ?? null, chain: [...list].reverse() }));
 
   // "What's happening now": the latest event per online agent, so the operator
   // can read the current state as a sentence instead of decoding the chain.
-  const latestByAgent = new Map<string, LiveEvent>();
-  for (const ev of events) {
-    if (ev.agent_id && !latestByAgent.has(ev.agent_id)) latestByAgent.set(ev.agent_id, ev);
-  }
   const nowRows = fleet
     .filter((a) => isFresh(a.last_seen))
     .map((a) => ({ agent: a, last: latestByAgent.get(a.agent_id) ?? null }));
-
-  useEffect(() => {
-    const el = spineRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [events, cols]);
 
   const online = fleet.filter((a) => isFresh(a.last_seen)).length;
 
@@ -219,46 +272,25 @@ export function Range() {
         </ul>
       )}
 
-      <h2 className="section-title">Activity chain</h2>
-      <div className="chain" ref={spineRef}>
-        {chain.length === 0 ? (
-          <p className="empty">Waiting for activity… the chain builds as agents act.</p>
+      <h2 className="section-title">Activity chains</h2>
+      <div className="chains" ref={wrapRef}>
+        {lanes.length === 0 ? (
+          <p className="empty">Waiting for activity… a chain appears per agent as they act.</p>
         ) : (
-          rows.map((row, r) => {
-            // Serpentine: even rows run left→right, odd rows right→left, so the
-            // chain snakes down the page (> > > ⬇ < < <) instead of scrolling off.
-            const reversed = r % 2 === 1;
-            const cells = reversed ? [...row].reverse() : row;
-            const turn = r === 0 ? "" : reversed ? " turn-right" : " turn-left";
+          lanes.map(({ id, agent, chain }) => {
+            const fresh = agent ? isFresh(agent.last_seen) : false;
             return (
-              <div className={`chain-row${turn}`} key={r}>
-                {r > 0 && <span className="chain-turn" />}
-                {cells.map((ev, i) => {
-                  const detail = detailOf(ev);
-                  const cls = CATEGORY_CLASS[ev.activity_type] ?? "ev-process";
-                  return (
-                    <div
-                      className={`chain-step${ev.id === newestId ? " newest" : ""}`}
-                      key={ev.id}
-                    >
-                      {i > 0 && <span className="chain-link" />}
-                      <div className={`chain-node ${cls}`}>
-                        <span className="chain-glyph">
-                          {CATEGORY_GLYPH[ev.activity_type] ?? "•"}
-                        </span>
-                      </div>
-                      <div className="chain-label">
-                        <span className="chain-app">{ev.app}</span>
-                        <span className="chain-kind">{ev.activity_type}</span>
-                        {detail && <span className="chain-detail">{detail}</span>}
-                        <span className="chain-who">
-                          {ev.agent_id ?? "?"} · {clock(ev.timestamp)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <section className="lane" key={id}>
+                <div className="lane-head">
+                  <span className={`status-dot${fresh ? " on" : " off"}`} />
+                  <Link to={`/agents/${id}`} className="lane-id">
+                    {id}
+                  </Link>
+                  {agent?.role && <span className="lane-role">{agent.role}</span>}
+                  <span className="lane-app">{fresh ? (agent?.current_app ?? "idle") : "offline"}</span>
+                </div>
+                <ChainLane events={chain} cols={cols} />
+              </section>
             );
           })
         )}
