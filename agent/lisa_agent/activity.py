@@ -652,6 +652,31 @@ def pick_weighted_activity(activities: list[Activity], rng: random.Random) -> Ac
     return rng.choices(activities, weights=weights, k=1)[0]
 
 
+def activity_category(activity: Activity) -> tuple[str, str | None]:
+    """Classify an activity into a coarse OS-level category for reporting.
+
+    SOC tooling sees activities as process / file / network / input events, not
+    as "wrote a commit message" (see docs/agent-config-schema.md). We derive the
+    category from the activity's commands and surface the most telling detail
+    (a URL, host, or filename) so the live feed and the SIEM speak the same
+    language. Network wins over file wins over input, since that ordering
+    matches what a detection pipeline cares about most.
+    """
+    detail: str | None = None
+    for c in activity.commands:
+        if c.url:
+            return "network", c.url
+        if c.host:
+            return "network", f"{c.host}:{c.port}" if c.port else c.host
+    for c in activity.commands:
+        if c.target:
+            return "file", f"{c.target} -> {c.dest}" if c.dest else c.target
+    for c in activity.commands:
+        if c.text or c.key or c.keys:
+            return "input", detail
+    return "process", detail
+
+
 class ActivityEngine:
     """Opens applications and performs their activities."""
 
@@ -660,10 +685,22 @@ class ActivityEngine:
         runner: Runner | None = None,
         rng: random.Random | None = None,
         sleep: Callable[[float], None] | None = None,
+        on_event: Callable[..., None] | None = None,
     ) -> None:
         self.run = runner or run_command
         self.rng = rng or random.Random()
         self.sleep = sleep or time.sleep
+        # Optional sink for activity events (EventReporter.record). A no-op by
+        # default so the engine stays usable (and testable) without a backend.
+        self.on_event = on_event
+
+    def _emit(self, app: str, activity_type: str, **kw: Any) -> None:
+        if self.on_event is None:
+            return
+        try:
+            self.on_event(app, activity_type, **kw)
+        except Exception:
+            log.debug("on_event raised, ignoring", exc_info=True)
 
     def open_app(self, app: Application) -> bool:
         if not app.open_cmd:
@@ -671,11 +708,16 @@ class ActivityEngine:
             return False
         log.info("opening %s", app.name)
         ok = self.run(app.open_cmd).success
-        if ok and app.startup_delay:
-            self.sleep(app.startup_delay)
+        if ok:
+            self._emit(app.name, "app_open")
+            if app.startup_delay:
+                self.sleep(app.startup_delay)
         return ok
 
     def close_app(self, app: Application) -> None:
+        # Report the close whether or not the app has an explicit close command:
+        # either way the agent is leaving this app, which is what the feed shows.
+        self._emit(app.name, "app_close")
         if app.close_cmd:
             log.info("closing %s", app.name)
             self.run(app.close_cmd)
@@ -686,6 +728,11 @@ class ActivityEngine:
         if activity is None:
             return False
         log.info("%s: %s", app.name, activity.name)
+        category, detail = activity_category(activity)
+        context: dict[str, Any] = {"activity": activity.name}
+        if detail:
+            context["detail"] = detail
+        self._emit(app.name, category, context=context)
         for command in activity.commands:
             shell = command.to_shell()
             if shell is None:

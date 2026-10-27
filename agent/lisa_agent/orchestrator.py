@@ -38,6 +38,7 @@ class Agent:
         apps: list[Application],
         engine,  # ActivityEngine - untyped to keep this module import-light
         heartbeat,  # HeartbeatLoop | None
+        events=None,  # EventReporter | None - live activity feed (#232)
         mutex=None,  # AgentMutex | None
         now: Callable[[], datetime] | None = None,
         sleep: Callable[[float], None] | None = None,
@@ -54,6 +55,7 @@ class Agent:
         self.apps = apps
         self.engine = engine
         self.heartbeat = heartbeat
+        self.events = events
         self.mutex = mutex
         self.now = now or datetime.now
         self.sleep = sleep or time.sleep
@@ -110,6 +112,8 @@ class Agent:
         if self.heartbeat is not None:
             self.heartbeat.start()
             self.heartbeat.force()
+        if self.events is not None:
+            self.events.start()
         log.info("Agent starting")
         try:
             self._run_loop()
@@ -160,6 +164,10 @@ class Agent:
             if self._activity_counter >= self._next_inactive_check:
                 self._activity_counter = 0
                 self._next_inactive_check = self.rng.randint(*self.inactive_period_range)
+                if self.events is not None and self.current_app is not None:
+                    self.events.record(
+                        self.current_app.name, "idle", context={"reason": "stepped_away"}
+                    )
                 self._interruptible_sleep(self.rng.uniform(30, 120))
                 continue
 
@@ -204,5 +212,7 @@ class Agent:
         if self.heartbeat is not None:
             self.heartbeat.force()  # final status report
             self.heartbeat.stop()
+        if self.events is not None:
+            self.events.stop()  # flushes any buffered events on the way out
         if self.mutex is not None:
             self.mutex.release()
