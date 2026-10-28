@@ -192,6 +192,13 @@ def build_agent(
             installer_path,
             agent_id=agent_id,
             target_os=resolved_target,
+            # Deliver the runtime config to the target so the launchd/nohup/task
+            # -started agent finds its package + backend instead of exiting on a
+            # missing ./package.json. package.json content is exactly what we
+            # persisted beside the binary.
+            backend_url=backend_url,
+            agent_token=agent_token,
+            package_json=ws.package_json.read_text(encoding="utf-8"),
         )
         installer_url = storage.store_installer(
             agent_id=agent_id, installer=installer_path, root=storage_root

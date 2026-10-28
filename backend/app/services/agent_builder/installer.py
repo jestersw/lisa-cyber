@@ -31,8 +31,14 @@ import base64
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_escape
 
 log = logging.getLogger("lisa.builder.installer")
+
+# Heredoc delimiter used to write the deployment package verbatim on the target.
+# Quoted in the script (<<'…') so the JSON is written with no shell expansion;
+# chosen so it cannot collide with a line of real JSON.
+_PKG_HEREDOC = "LISA_PKG_EOF"
 
 # Sentinel line that marks the boundary between bash header and binary payload.
 # Chosen to be very unlikely to appear in a real bash script or ELF file.
@@ -58,6 +64,9 @@ def wrap_as_installer(
     agent_id: str,
     install_dir: str = "/opt/lisa",
     target_os: str = "linux",
+    backend_url: str = "",
+    agent_token: str = "",
+    package_json: str | None = None,
 ) -> InstallerArtefact:
     """Produce a self-extracting installer at `output_path`.
 
@@ -74,6 +83,12 @@ def wrap_as_installer(
       "windows" writes a base64-embedded .ps1 that decodes the agent under
       %LOCALAPPDATA%\\lisa and registers a per-user scheduled task that starts
       it at logon (#221). install_dir applies to Linux only.
+    - backend_url / agent_token / package_json: the runtime config delivered to
+      the target so the installed agent starts configured. When package_json is
+      given, the installer drops it next to the binary and points the agent at
+      it (LISA_PACKAGE_PATH) along with the backend URL and token; without it
+      the agent would look for ./package.json in its launcher's cwd and exit.
+      Left empty for a bare binary wrap (e.g. tests).
 
     The output file is chmod +x so it can be executed directly (a no-op on
     Windows, where the .ps1 is run with PowerShell). Fails with InstallerError
@@ -96,12 +111,26 @@ def wrap_as_installer(
         contents = _windows_header(
             agent_id=agent_id,
             payload_b64=base64.b64encode(payload).decode("ascii"),
+            backend_url=backend_url,
+            agent_token=agent_token,
+            package_json=package_json,
         ).encode("utf-8")
     else:
         if target_os == "macos":
-            header_text = _macos_header(agent_id=agent_id)
+            header_text = _macos_header(
+                agent_id=agent_id,
+                backend_url=backend_url,
+                agent_token=agent_token,
+                package_json=package_json,
+            )
         elif target_os == "linux":
-            header_text = _bash_header(agent_id=agent_id, install_dir=install_dir)
+            header_text = _bash_header(
+                agent_id=agent_id,
+                install_dir=install_dir,
+                backend_url=backend_url,
+                agent_token=agent_token,
+                package_json=package_json,
+            )
         else:
             raise InstallerError(f"no installer template for target OS {target_os!r}")
         header = header_text.encode("utf-8")
@@ -126,7 +155,33 @@ def wrap_as_installer(
     return InstallerArtefact(path=output_path, size_bytes=len(contents))
 
 
-def _bash_header(*, agent_id: str, install_dir: str) -> str:
+def _sh_write_package(pkg_path_expr: str, package_json: str) -> str:
+    """POSIX-sh snippet writing the deployment package to `pkg_path_expr` (a
+    shell expression, e.g. "$install_dir/package_<id>.json"). A quoted heredoc
+    keeps the JSON byte-for-byte with no shell expansion of its contents."""
+    return f"cat > \"{pkg_path_expr}\" <<'{_PKG_HEREDOC}'\n{package_json}\n{_PKG_HEREDOC}"
+
+
+def _sh_exports(*, backend_url: str, agent_token: str, pkg_path_expr: str) -> str:
+    """`export` lines pointing the agent at its package + backend. Used where the
+    agent inherits the installer's environment (Linux nohup); macOS instead bakes
+    these into the LaunchAgent plist, which launchd does not inherit from us."""
+    lines = [f'export LISA_PACKAGE_PATH="{pkg_path_expr}"']
+    if backend_url:
+        lines.append(f"export LISA_BACKEND_URL='{backend_url}'")
+    if agent_token:
+        lines.append(f"export LISA_AGENT_TOKEN='{agent_token}'")
+    return "\n".join(lines)
+
+
+def _bash_header(
+    *,
+    agent_id: str,
+    install_dir: str,
+    backend_url: str = "",
+    agent_token: str = "",
+    package_json: str | None = None,
+) -> str:
     """The bash script that extracts and launches the agent.
 
     Kept small and readable - an operator can `head` the installer file and
@@ -143,6 +198,22 @@ def _bash_header(*, agent_id: str, install_dir: str) -> str:
     # Path where the agent will end up on the VM. agent_id in the name so
     # two installers for two different agents don't fight over the same file.
     agent_path = f"{install_dir}/agent_{agent_id}"
+
+    # Deliver the runtime config alongside the binary: drop package.json next to
+    # it and export the env the agent reads at startup, so the backgrounded
+    # process is already pointed at its package + backend. Without this the agent
+    # would look for ./package.json in nohup's cwd and exit (see #212 follow-up).
+    config = ""
+    if package_json:
+        pkg_expr = f"{install_dir}/package_{agent_id}.json"
+        exports = _sh_exports(
+            backend_url=backend_url, agent_token=agent_token, pkg_path_expr=pkg_expr
+        )
+        config = (
+            "\n# Deployment package + runtime config the agent reads at startup.\n"
+            f"{_sh_write_package(pkg_expr, package_json)}\n"
+            f"{exports}\n"
+        )
     return f"""#!/bin/sh
 # LISA agent installer for {agent_id}. Self-extracting: script + binary.
 # Runs once, drops the agent, launches it in the background, exits.
@@ -157,9 +228,10 @@ mkdir -p "$install_dir"
 # lines strictly after the match, so the marker itself is not included.
 sed -e '1,/^{marker}$/d' "$0" > "$agent_path"
 chmod +x "$agent_path"
-
+{config}
 # Launch detached from this shell so the installer can exit cleanly.
-# nohup + & keeps the agent alive after the installer process ends.
+# nohup + & keeps the agent alive after the installer process ends. It inherits
+# the LISA_* env exported just above.
 nohup "$agent_path" >/dev/null 2>&1 &
 agent_pid=$!
 
@@ -178,7 +250,13 @@ exit 0
 """
 
 
-def _macos_header(*, agent_id: str) -> str:
+def _macos_header(
+    *,
+    agent_id: str,
+    backend_url: str = "",
+    agent_token: str = "",
+    package_json: str | None = None,
+) -> str:
     """Self-extracting installer that registers the agent as a per-user
     LaunchAgent (issue #198).
 
@@ -190,9 +268,47 @@ def _macos_header(*, agent_id: str) -> str:
 
     Like the Linux header this is /bin/sh + `sed` self-extraction; only the
     install/launch tail differs.
+
+    When a `package_json` is given, it is dropped next to the binary and the
+    plist's `EnvironmentVariables` point the agent at it (plus the backend URL
+    and token). launchd does not inherit the installer's environment, so these
+    must live in the plist — otherwise the agent looks for ./package.json in
+    launchd's cwd (/), fails to load, and KeepAlive thrashes it forever.
     """
     marker = _PAYLOAD_MARKER.decode("ascii")
     label = f"com.lisa.agent.{agent_id}"
+
+    # Config delivery (only when a package was supplied). pkg_var declares the
+    # on-disk path, pkg_setup writes the package there, env_block wires the
+    # LaunchAgent's environment to it. $pkg_path is expanded by the (unquoted)
+    # PLIST heredoc at install time; backend_url/token are baked in now.
+    pkg_var = ""
+    pkg_setup = ""
+    env_block = ""
+    uninstall_pkg = ""
+    if package_json:
+        pkg_var = f'\npkg_path="$app_support/package_{agent_id}.json"'
+        uninstall_pkg = ' "$pkg_path"'
+        pkg_setup = (
+            "\n# Deployment package the LaunchAgent points LISA_PACKAGE_PATH at.\n"
+            f"{_sh_write_package('$pkg_path', package_json)}\n"
+        )
+        env_lines = [
+            "    <key>EnvironmentVariables</key>",
+            "    <dict>",
+            "        <key>LISA_PACKAGE_PATH</key><string>$pkg_path</string>",
+        ]
+        if backend_url:
+            env_lines.append(
+                f"        <key>LISA_BACKEND_URL</key><string>{_xml_escape(backend_url)}</string>"
+            )
+        if agent_token:
+            env_lines.append(
+                f"        <key>LISA_AGENT_TOKEN</key><string>{_xml_escape(agent_token)}</string>"
+            )
+        env_lines.append("    </dict>")
+        env_block = "\n" + "\n".join(env_lines)
+
     return f"""#!/bin/sh
 # LISA agent installer for {agent_id} (macOS). Self-extracting: script + binary.
 # Installs a per-user LaunchAgent so the agent starts at login and is kept
@@ -204,7 +320,7 @@ app_support="$HOME/Library/Application Support/lisa"
 agents_dir="$HOME/Library/LaunchAgents"
 agent_path="$app_support/agent_{agent_id}"
 plist="$agents_dir/$label.plist"
-uninstall="$app_support/uninstall_{agent_id}.sh"
+uninstall="$app_support/uninstall_{agent_id}.sh"{pkg_var}
 
 mkdir -p "$app_support" "$agents_dir"
 
@@ -212,7 +328,7 @@ mkdir -p "$app_support" "$agents_dir"
 # lines strictly after the match, so the marker itself is not included.
 sed -e '1,/^{marker}$/d' "$0" > "$agent_path"
 chmod +x "$agent_path"
-
+{pkg_setup}
 # LaunchAgent definition: start at login, restart on crash, logs discarded.
 cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -222,7 +338,7 @@ cat > "$plist" <<PLIST
     <key>Label</key><string>$label</string>
     <key>ProgramArguments</key><array><string>$agent_path</string></array>
     <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
+    <key>KeepAlive</key><true/>{env_block}
     <key>StandardOutPath</key><string>/dev/null</string>
     <key>StandardErrorPath</key><string>/dev/null</string>
 </dict>
@@ -233,7 +349,7 @@ PLIST
 cat > "$uninstall" <<UNINSTALL
 #!/bin/sh
 launchctl unload "$plist" 2>/dev/null || true
-rm -f "$plist" "$agent_path" "$uninstall"
+rm -f "$plist" "$agent_path" "$uninstall"{uninstall_pkg}
 UNINSTALL
 chmod +x "$uninstall"
 
@@ -280,7 +396,7 @@ $payload = @'
 __PAYLOAD_B64__
 '@
 [IO.File]::WriteAllBytes($agentExe, [Convert]::FromBase64String($payload))
-
+__CONFIG__
 # Register a per-user scheduled task that launches the agent at logon. No admin
 # needed; this is the Windows analogue of the macOS LaunchAgent (RunAtLoad).
 # /F overwrites any previous task so re-running the installer updates it.
@@ -292,7 +408,8 @@ schtasks.exe /Create /TN $taskName /TR ('"' + $agentExe + '"') /SC ONLOGON /F | 
 $uninstallBody = @"
 schtasks.exe /Delete /TN "$taskName" /F 2>`$null
 Get-Process -Name "$procName" -ErrorAction SilentlyContinue | Stop-Process -Force
-Remove-Item -Force -ErrorAction SilentlyContinue -Path "$agentExe","$uninstall"
+__UNINSTALL_ENV__Remove-Item -Force -ErrorAction SilentlyContinue -Path "$agentExe","$uninstall"
+__UNINSTALL_PKG__
 "@
 Set-Content -Path $uninstall -Value $uninstallBody -Encoding UTF8
 
@@ -311,7 +428,14 @@ exit 0
 """
 
 
-def _windows_header(*, agent_id: str, payload_b64: str) -> str:
+def _windows_header(
+    *,
+    agent_id: str,
+    payload_b64: str,
+    backend_url: str = "",
+    agent_token: str = "",
+    package_json: str | None = None,
+) -> str:
     """Self-extracting PowerShell installer that registers the agent as a
     per-user scheduled task (issue #221).
 
@@ -329,8 +453,59 @@ def _windows_header(*, agent_id: str, payload_b64: str) -> str:
     that parse.
     """
     task_name = f"LISA Agent {agent_id}"
+
+    # Config delivery: drop package.json under %LOCALAPPDATA%\lisa and set the
+    # LISA_* vars at User scope so the logon-triggered scheduled task inherits
+    # them (schtasks can't carry env), plus in this session so the immediate
+    # launch below inherits them too. Without this the agent would look for
+    # .\package.json in the task's cwd and exit. The uninstaller clears the vars.
+    config = ""
+    uninstall_env = ""
+    uninstall_pkg = ""
+    if package_json:
+        uninstall_pkg = 'Remove-Item -Force -ErrorAction SilentlyContinue -Path "$pkgPath"'
+        url = _ps_single_quote(backend_url)
+        token = _ps_single_quote(agent_token)
+        set_lines = [
+            "# Deployment package + runtime config the agent reads at startup.",
+            "$pkgPath = Join-Path $installDir ('package_' + $agentId + '.json')",
+            "$pkg = @'",
+            package_json,
+            "'@",
+            "Set-Content -Path $pkgPath -Value $pkg -Encoding UTF8",
+            "[Environment]::SetEnvironmentVariable('LISA_PACKAGE_PATH', $pkgPath, 'User')",
+            "$env:LISA_PACKAGE_PATH = $pkgPath",
+        ]
+        if backend_url:
+            set_lines.append(_ps_setenv("LISA_BACKEND_URL", url))
+            set_lines.append(f"$env:LISA_BACKEND_URL = {url}")
+        if agent_token:
+            set_lines.append(_ps_setenv("LISA_AGENT_TOKEN", token))
+            set_lines.append(f"$env:LISA_AGENT_TOKEN = {token}")
+        config = "\n" + "\n".join(set_lines) + "\n"
+        uninstall_env = (
+            "[Environment]::SetEnvironmentVariable('LISA_PACKAGE_PATH', `$null, 'User')\n"
+            "[Environment]::SetEnvironmentVariable('LISA_BACKEND_URL', `$null, 'User')\n"
+            "[Environment]::SetEnvironmentVariable('LISA_AGENT_TOKEN', `$null, 'User')\n"
+        )
+
     return (
         _WINDOWS_TEMPLATE.replace("__AGENT_ID__", agent_id)
         .replace("__TASK_NAME__", task_name)
+        .replace("__CONFIG__", config)
+        .replace("__UNINSTALL_ENV__", uninstall_env)
+        .replace("__UNINSTALL_PKG__", uninstall_pkg)
         .replace("__PAYLOAD_B64__", payload_b64)
     )
+
+
+def _ps_single_quote(value: str) -> str:
+    """Quote a value as a PowerShell single-quoted string literal (doubling any
+    embedded single quotes). Returns the literal including its quotes."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _ps_setenv(name: str, value_literal: str) -> str:
+    """A PowerShell line setting a User-scope env var. `value_literal` is already
+    a PowerShell expression (e.g. a quoted literal or a variable)."""
+    return f"[Environment]::SetEnvironmentVariable('{name}', {value_literal}, 'User')"

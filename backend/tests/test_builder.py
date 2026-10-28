@@ -404,9 +404,11 @@ def test_installer_can_be_run_end_to_end(tmp_path):
 
     install_dir = tmp_path / "install_root"
 
-    def wrap_in_tmp(binary, out, *, agent_id, install_dir=str(install_dir), target_os="linux"):
+    def wrap_in_tmp(
+        binary, out, *, agent_id, install_dir=str(install_dir), target_os="linux", **kwargs
+    ):
         return _orig_wrap(
-            binary, out, agent_id=agent_id, install_dir=install_dir, target_os=target_os
+            binary, out, agent_id=agent_id, install_dir=install_dir, target_os=target_os, **kwargs
         )
 
     with (
