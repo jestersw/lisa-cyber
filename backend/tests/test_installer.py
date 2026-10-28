@@ -8,9 +8,17 @@ import pytest
 from app.services.agent_builder.installer import (
     InstallerArtefact,
     InstallerError,
+    _bash_header,
     _macos_header,
     _windows_header,
     wrap_as_installer,
+)
+
+# A realistic deployment package (indented JSON with the braces that would break
+# a naive f-string / here-string) used to exercise config delivery.
+_SAMPLE_PKG = (
+    '{\n  "agent_config": {\n    "agent_id": "USR001",\n    "role": "dev"\n  },\n'
+    '  "application_plugins": [\n    {"name": "Chrome"}\n  ]\n}'
 )
 
 
@@ -283,3 +291,114 @@ def test_windows_header_mentions_agent_id(tmp_path):
     header = _windows_header(agent_id="USR001", payload_b64="QUJD")
     assert "USR001" in header
     assert header.startswith("#Requires -Version 5")
+
+
+# ---------- config delivery (#212 follow-up) ----------
+#
+# The installer must drop the deployment package on the target and point the
+# agent at it (+ backend URL / token), or the launchd/nohup/task-started agent
+# looks for ./package.json in its launcher's cwd and exits.
+
+
+def _sh_syntax_ok(script: str, tmp_path) -> bool:
+    p = tmp_path / "h.sh"
+    p.write_text(script, encoding="utf-8")
+    return subprocess.run(["sh", "-n", str(p)]).returncode == 0
+
+
+def test_macos_header_delivers_config(tmp_path):
+    header = _macos_header(
+        agent_id="USR001",
+        backend_url="http://backend:8000",
+        agent_token="enroll-tok",
+        package_json=_SAMPLE_PKG,
+    )
+    # LaunchAgent env wires the agent to its package + backend (launchd does not
+    # inherit the installer's environment, so these must be in the plist).
+    assert "<key>EnvironmentVariables</key>" in header
+    assert "<key>LISA_PACKAGE_PATH</key><string>$pkg_path</string>" in header
+    assert "http://backend:8000" in header
+    assert "enroll-tok" in header
+    # The package itself is written next to the binary via a quoted here-doc.
+    assert "package_USR001.json" in header
+    assert _SAMPLE_PKG in header
+    assert _sh_syntax_ok(header, tmp_path)
+
+
+def test_macos_header_xml_escapes_env_values(tmp_path):
+    header = _macos_header(
+        agent_id="USR001",
+        backend_url="http://h/?a=1&b=2",
+        agent_token="t<ok>",
+        package_json=_SAMPLE_PKG,
+    )
+    assert "http://h/?a=1&amp;b=2" in header
+    assert "t&lt;ok&gt;" in header
+    assert _sh_syntax_ok(header, tmp_path)
+
+
+def test_bash_header_delivers_config(tmp_path):
+    header = _bash_header(
+        agent_id="USR001",
+        install_dir="/opt/lisa",
+        backend_url="http://backend:8000",
+        agent_token="enroll-tok",
+        package_json=_SAMPLE_PKG,
+    )
+    assert 'export LISA_PACKAGE_PATH="/opt/lisa/package_USR001.json"' in header
+    assert "export LISA_BACKEND_URL='http://backend:8000'" in header
+    assert "export LISA_AGENT_TOKEN='enroll-tok'" in header
+    assert _SAMPLE_PKG in header
+    assert _sh_syntax_ok(header, tmp_path)
+
+
+def test_headers_without_package_carry_no_config(tmp_path):
+    # Back-compat: a bare wrap (no package) stays exactly a binary dropper.
+    mac = _macos_header(agent_id="USR001")
+    bash = _bash_header(agent_id="USR001", install_dir="/opt/lisa")
+    for header in (mac, bash):
+        assert "EnvironmentVariables" not in header
+        assert "LISA_PACKAGE_PATH" not in header
+        assert "package_USR001.json" not in header
+
+
+def test_windows_header_delivers_config(tmp_path):
+    header = _windows_header(
+        agent_id="USR001",
+        payload_b64="QUJD",
+        backend_url="http://backend:8000",
+        agent_token="enroll-tok",
+        package_json=_SAMPLE_PKG,
+    )
+    assert "SetEnvironmentVariable('LISA_PACKAGE_PATH'" in header
+    assert "SetEnvironmentVariable('LISA_BACKEND_URL', 'http://backend:8000', 'User')" in header
+    assert "SetEnvironmentVariable('LISA_AGENT_TOKEN', 'enroll-tok', 'User')" in header
+    assert "package_" in header
+    assert _SAMPLE_PKG in header
+    # The uninstaller clears the vars; $null must survive as a literal (backtick).
+    assert "`$null" in header
+
+
+def test_running_installer_drops_package_beside_binary(tmp_path):
+    # End-to-end on the Linux path: the dropped package.json lands next to the
+    # agent so a cwd-less launcher still finds it via LISA_PACKAGE_PATH.
+    install_dir = tmp_path / "opt"
+    fake_agent = tmp_path / "agent_USR001"
+    fake_agent.write_text("#!/bin/sh\nsleep 5\n")
+    fake_agent.chmod(0o755)
+    installer = tmp_path / "installer.sh"
+    wrap_as_installer(
+        fake_agent,
+        installer,
+        agent_id="USR001",
+        install_dir=str(install_dir),
+        backend_url="http://backend:8000",
+        agent_token="enroll-tok",
+        package_json=_SAMPLE_PKG,
+    )
+    subprocess.run(["sh", str(installer)], check=True)
+    dropped = install_dir / "package_USR001.json"
+    assert dropped.is_file()
+    assert dropped.read_text(encoding="utf-8").strip() == _SAMPLE_PKG.strip()
+    # Clean up the backgrounded fake agent.
+    subprocess.run(["pkill", "-f", str(install_dir / "agent_USR001")])
