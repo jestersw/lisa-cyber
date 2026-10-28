@@ -70,27 +70,67 @@ infra/ deployment assets
 
 ## Quick start
 
+### Run the stack (development)
+
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up -d --build
 ```
 
-- Management API and interactive docs: http://localhost:8000/docs
-- Control panel (development server): http://localhost:5173
+- Control panel: http://localhost:5173
+- Management API + interactive docs: http://localhost:8000/docs
 
-Once the stack is up, create an agent in the panel, wait for its status to reach
-`ready`, and download the installer. To verify the build-to-installer path end to end
-against a running stack:
+With a blank `.env` the panel and agent endpoints run **open** (dev mode); set
+`OPERATOR_PASSWORD` in `.env` to lock the panel behind a login.
+
+> **Apple Silicon (arm64):** the `builder` service is pinned to `linux/amd64`
+> and runs under emulation. For a quick panel + API run, skip it and start only
+> the core services:
+> ```bash
+> docker compose up -d postgres redis migrate backend frontend
+> ```
+
+Create an agent in the panel, wait for its status to reach `ready`, and download
+its installer. To verify the build-to-installer path end to end against a running
+stack:
 
 ```bash
 ./scripts/smoke_backend.sh
 ```
 
+### Show-to-customer demo (public, HTTPS, locked panel)
+
+A separate compose file serves the panel + API behind Caddy on one HTTPS origin,
+with the panel locked and the live range driven by the built-in **Run** simulator
+— no target hosts, SSH, or build workers needed:
+
+```bash
+cp deploy/demo/.env.demo.example deploy/demo/.env.demo   # fill in secrets + DEMO_DOMAIN
+docker compose --env-file deploy/demo/.env.demo -f docker-compose.demo.yml up -d --build
+```
+
+Only Caddy is exposed (80/443, automatic Let's Encrypt); the stack refuses to
+start without `OPERATOR_PASSWORD` / `JWT_SECRET` / `POSTGRES_PASSWORD` /
+`DEMO_DOMAIN`. See `docs/demo-deploy.md` for the full runbook, including a free
+Oracle Cloud (ARM) host and getting a real TLS cert without a domain via `nip.io`.
+
+To stop a stack (data in named volumes persists; add `-v` to wipe it):
+
+```bash
+docker compose -f docker-compose.demo.yml down          # or: docker compose down
+```
+
 ## Deployment
 
 The builder produces the installer as a plain file; how it reaches a range VM is a
-deployment choice — cloud-init user-data, a golden VM template, or manual copy. See
-`docs/deployment.md` for the options and examples.
+deployment choice — cloud-init user-data, a golden VM template, panel-triggered
+Ansible, or manual copy. See `docs/deployment.md` for the options and examples.
+
+macOS and Windows installers (which the Linux backend can't build itself, since
+Nuitka doesn't cross-compile) are produced on demand by the **build-installer**
+GitHub Actions workflow — it runs on a matching runner (`macos-latest` /
+`windows-latest`) and uploads `installer_<id>.(sh|ps1)`; download the artefact and
+upload it to the agent's build storage so the panel serves it.
 
 ## Scope
 
@@ -98,8 +138,9 @@ The agent runs on Linux, macOS and Windows range VMs from one codebase. Because 
 compiles for the host it runs on and cannot cross-compile, each OS is built by a build
 worker running on that OS, draining its own queue; the backend only enqueues builds for
 OSes a worker exists for (`BUILDABLE_OS`). Linux is the default worker shipped in
-`docker-compose.yml`; see `docs/deployment.md` for standing up macOS and Windows
-workers. Builds are x86_64.
+`docker-compose.yml` (x86_64); see `docs/deployment.md` for standing up macOS and Windows
+workers, or use the `build-installer` GitHub Actions workflow to produce a macOS/Windows
+installer on demand (built natively on the matching runner).
 
 ## Intended use
 
