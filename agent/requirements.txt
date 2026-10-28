@@ -1,0 +1,7 @@
+# Runtime dependencies for the LISA agent — the single source of truth.
+#
+# pyproject.toml reads this list via dynamic metadata, and the build workers
+# install it into the Nuitka build environment so these packages are actually
+# bundled into the compiled agent. Keep runtime deps here (dev-only deps stay
+# in pyproject's optional "dev" extra).
+requests==2.32.3

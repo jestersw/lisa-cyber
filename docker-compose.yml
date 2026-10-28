@@ -69,7 +69,10 @@ services:
     image: lisa-backend:local
     build: ./backend
     platform: linux/amd64
-    command: ["python", "-m", "app.services.agent_builder"]
+    # Install the agent's runtime deps into the build image before draining the
+    # queue, so Nuitka bundles them into the compiled agent. The agent source
+    # (with requirements.txt) is bind-mounted read-only at /agent-src.
+    command: ["sh", "-c", "pip install --no-cache-dir -r /agent-src/requirements.txt && python -m app.services.agent_builder"]
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD:-lisa}@postgres:5432/${POSTGRES_DB:-lisa}
       REDIS_URL: redis://redis:6379/0

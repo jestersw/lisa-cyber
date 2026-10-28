@@ -387,7 +387,7 @@ panel's download and Ansible fetch would 404).
 On a macOS host that can reach the same Postgres and Redis as the backend:
 
 ```sh
-pip install -r backend/requirements.txt nuitka
+pip install -r backend/requirements.txt -r agent/requirements.txt nuitka
 export LISA_AGENT_SOURCE_ROOT="$PWD/agent/lisa_agent"
 export LISA_BACKEND_URL="https://<backend-host>"   # what the agent phones home to
 export DATABASE_URL=...        # same DB as the backend
@@ -420,7 +420,7 @@ with Python 3.12 and a C toolchain Nuitka can use (MSVC Build Tools, or let
 Nuitka download MinGW on first run):
 
 ```powershell
-pip install -r backend/requirements.txt nuitka
+pip install -r backend/requirements.txt -r agent/requirements.txt nuitka
 $env:LISA_AGENT_SOURCE_ROOT = "$PWD\agent\lisa_agent"
 $env:LISA_BACKEND_URL = "https://<backend-host>"   # what the agent phones home to
 $env:DATABASE_URL = "..."       # same DB as the backend
