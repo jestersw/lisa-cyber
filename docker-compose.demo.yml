@@ -1,0 +1,107 @@
+# Demo / show-to-customer deployment.
+#
+# Differs from docker-compose.yml (dev) in the ways that matter for exposing
+# LISA on the public internet for a demo:
+#   * only Caddy is published (80/443) — it terminates TLS (auto Let's Encrypt)
+#     and reverse-proxies panel + API on ONE origin, so there is no CORS to wire
+#     and the database/redis/backend are never reachable from outside;
+#   * the panel is LOCKED: OPERATOR_PASSWORD and JWT_SECRET are required (compose
+#     refuses to start without them) instead of dev-open;
+#   * no builder/trainer and no real-agent plumbing — the live Range view is
+#     driven by the server-side "Run" simulator, which is all a demo needs.
+#
+# Bring-up (see docs/demo-deploy.md):
+#   cp deploy/demo/.env.demo.example deploy/demo/.env.demo   # then fill it in
+#   docker compose --env-file deploy/demo/.env.demo -f docker-compose.demo.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lisa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.demo}
+      POSTGRES_DB: ${POSTGRES_DB:-lisa}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lisa}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  migrate:
+    image: lisa-backend:local
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lisa}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    image: lisa-backend:local
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lisa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lisa}
+      REDIS_URL: redis://redis:6379/0
+      # Same-origin behind Caddy, so CORS is effectively unused; set to the
+      # public origin anyway for defence in depth.
+      CORS_ORIGINS: '["https://${DEMO_DOMAIN}"]'
+      PUBLIC_BASE_URL: https://${DEMO_DOMAIN}
+      ML_MODELS_DIR: /models
+      # Panel auth — REQUIRED for a public demo (compose fails if unset).
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:?set OPERATOR_PASSWORD in .env.demo}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.demo}
+      # Locks the agent-facing endpoints too (optional; the simulator writes to
+      # the DB directly and does not need it).
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      BUILDABLE_OS: ${BUILDABLE_OS:-["linux"]}
+    volumes:
+      - models:/models
+      - builds:/var/lisa/builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Empty => the SPA uses relative /api paths; Caddy routes them to the
+        # backend on the same origin.
+        VITE_API_URL: ""
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN in .env.demo (e.g. <public-ip>.nip.io)}
+    volumes:
+      - ./deploy/demo/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  models:
+  builds:
+  caddy_data:
+  caddy_config:

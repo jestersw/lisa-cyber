@@ -13,6 +13,7 @@ dist/
 
 # Env & secrets
 .env
+deploy/demo/.env.demo
 *.pem
 *.key
 

@@ -1,0 +1,20 @@
+# Single-origin reverse proxy for the LISA demo.
+#
+# Caddy terminates TLS (automatic Let's Encrypt for a real hostname — a bare
+# public IP cannot get a public cert, so use a wildcard-DNS name that maps to
+# it, e.g. 203.0.113.10.nip.io) and serves panel + API on one origin:
+#   /api/*  -> backend (FastAPI)
+#   /*      -> frontend (the built SPA, served by its nginx)
+# One origin means the browser never makes a cross-origin call, so there is no
+# CORS to configure.
+
+{$DEMO_DOMAIN} {
+	encode zstd gzip
+
+	# API traffic to the backend.
+	@api path /api/*
+	reverse_proxy @api backend:8000
+
+	# Everything else is the single-page app.
+	reverse_proxy frontend:80
+}
