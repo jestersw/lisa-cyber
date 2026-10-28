@@ -9,6 +9,7 @@ import {
   type DeploymentPackage,
   type Diagnosis,
   type HeartbeatLog,
+  type Host,
   type NextActivity,
   type RunStatus,
 } from "../api/client";
@@ -30,8 +31,8 @@ export function AgentDetail() {
   const [prediction, setPrediction] = useState<NextActivity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [hosts, setHosts] = useState("");
-  const [sshUser, setSshUser] = useState("");
+  const [savedHosts, setSavedHosts] = useState<Host[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
   const [force, setForce] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -58,6 +59,19 @@ export function AgentDetail() {
       .catch(() => {
         if (active) {
           setPkg(null);
+        }
+      });
+
+    endpoints
+      .hosts()
+      .then((value) => {
+        if (active) {
+          setSavedHosts(value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSavedHosts([]);
         }
       });
 
@@ -151,23 +165,19 @@ export function AgentDetail() {
   const config = pkg?.agent_config;
 
   const submitDeploy = async () => {
-    const parsed = hosts
-      .split(/[\s,]+/)
-      .map((h) => h.trim())
-      .filter(Boolean);
-    if (parsed.length === 0) {
-      setDeployError("Enter at least one target host.");
+    const chosen = savedHosts.filter((h) => selected.includes(h.id));
+    if (chosen.length === 0) {
+      setDeployError("Select at least one host.");
       return;
     }
     setDeploying(true);
     setDeployError(null);
     try {
-      const user = sshUser.trim();
       await endpoints.deployAgent(agentId, {
-        targets: parsed.map((host) => ({ host, ssh_user: user || null })),
+        targets: chosen.map((h) => ({ host: h.address, ssh_user: h.ssh_user })),
         force,
       });
-      setHosts("");
+      setSelected([]);
       const latest = await endpoints.deployments(agentId);
       setDeployments(latest);
     } catch (err) {
@@ -176,6 +186,9 @@ export function AgentDetail() {
       setDeploying(false);
     }
   };
+
+  const toggleHost = (id: number) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const toggleRun = async () => {
     setRunBusy(true);
@@ -307,35 +320,41 @@ export function AgentDetail() {
         <section className="deploy-panel">
           <h2 className="section-title">Deploy to hosts</h2>
           <p className="field-hint">
-            Push this agent onto target hosts over SSH via Ansible. One host per line (or
-            comma-separated); each gets this agent installed and kept running.
+            Push this agent onto saved range hosts over SSH via Ansible — each gets it installed
+            and kept running. Manage your targets on the <Link to="/hosts">Hosts</Link> page.
           </p>
-          <div className="field">
-            <label htmlFor="deploy-hosts">Target hosts</label>
-            <textarea
-              id="deploy-hosts"
-              rows={3}
-              placeholder={"web01.corp.local\ndb01.corp.local"}
-              value={hosts}
-              onChange={(e) => setHosts(e.target.value)}
-            />
-          </div>
-          <div className="deploy-controls">
-            <div className="field">
-              <label htmlFor="deploy-user">SSH user (optional)</label>
-              <input
-                id="deploy-user"
-                placeholder="operator"
-                value={sshUser}
-                onChange={(e) => setSshUser(e.target.value)}
-              />
+          {savedHosts.length === 0 ? (
+            <p className="empty">
+              No saved hosts. Add your range's machines on the <Link to="/hosts">Hosts</Link> page,
+              then pick them here.
+            </p>
+          ) : (
+            <div className="host-pick">
+              {savedHosts.map((h) => (
+                <label key={h.id} className={`host-opt${selected.includes(h.id) ? " on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(h.id)}
+                    onChange={() => toggleHost(h.id)}
+                  />
+                  <span className="host-opt-label">{h.label}</span>
+                  <span className="host-opt-addr mono">{h.address}</span>
+                  {h.os_type && <span className="host-opt-os">{h.os_type}</span>}
+                </label>
+              ))}
             </div>
+          )}
+          <div className="deploy-controls">
             <label className="deploy-check">
               <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
               Force reinstall / update
             </label>
-            <button className="btn primary" onClick={submitDeploy} disabled={deploying}>
-              {deploying ? "Deploying…" : "Deploy"}
+            <button
+              className="btn primary"
+              onClick={submitDeploy}
+              disabled={deploying || selected.length === 0}
+            >
+              {deploying ? "Deploying…" : `Deploy to ${selected.length || "…"} host(s)`}
             </button>
           </div>
           {deployError && <div className="notice error">{deployError}</div>}

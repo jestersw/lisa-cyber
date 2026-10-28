@@ -14,6 +14,7 @@ from app.api.endpoints import (
     events,
     generate,
     heartbeat,
+    hosts,
     live,
     meta,
     ml,
@@ -64,6 +65,7 @@ app.include_router(
 app.include_router(deploy.router, prefix="/api", tags=["Deployment"], dependencies=_operator)
 app.include_router(diagnose.router, prefix="/api", tags=["Diagnostics"], dependencies=_operator)
 app.include_router(meta.router, prefix="/api", tags=["Meta"], dependencies=_operator)
+app.include_router(hosts.router, prefix="/api", tags=["Hosts"], dependencies=_operator)
 app.include_router(live.router, prefix="/api", tags=["Live view"], dependencies=_operator)
 app.include_router(runner.router, prefix="/api", tags=["Demo run"], dependencies=_operator)
 

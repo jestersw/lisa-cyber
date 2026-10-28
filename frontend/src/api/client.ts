@@ -166,6 +166,15 @@ export interface RunStatus {
   started_at: string | null;
 }
 
+export interface Host {
+  id: number;
+  label: string;
+  address: string;
+  ssh_user: string | null;
+  os_type: string | null;
+  created_at: string;
+}
+
 export interface FleetAgent {
   agent_id: string;
   name: string;
@@ -352,6 +361,10 @@ export const endpoints = {
   deployAgent: (agentId: string, body: DeployRequest) =>
     api.post<Deployment>(`/api/agents/${agentId}/deploy`, body),
   diagnoseAgent: (agentId: string) => api.post<Diagnosis>(`/api/agents/${agentId}/diagnose`, {}),
+  hosts: () => api.get<Host[]>("/api/hosts"),
+  createHost: (body: { label: string; address: string; ssh_user?: string; os_type?: string }) =>
+    api.post<Host>("/api/hosts", body),
+  deleteHost: (id: number) => api.del<void>(`/api/hosts/${id}`),
   runStatus: (agentId: string) => api.get<RunStatus>(`/api/agents/${agentId}/run`),
   startRun: (agentId: string) => api.post<RunStatus>(`/api/agents/${agentId}/run`, {}),
   stopRun: (agentId: string) => api.post<RunStatus>(`/api/agents/${agentId}/run/stop`, {}),
