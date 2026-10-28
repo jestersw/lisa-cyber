@@ -3,15 +3,18 @@ name = "lisa-agent"
 version = "0.1.0"
 description = "LISA activity-simulation agent (Linux, macOS, Windows)"
 requires-python = ">=3.12"
-dependencies = [
-    "requests==2.32.3",
-]
+# Runtime dependencies live in requirements.txt (single source of truth) so the
+# build workers can install the exact same set into the Nuitka environment.
+dynamic = ["dependencies"]
 
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.4",
     "ruff==0.17.1",
 ]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
 
 [project.scripts]
 lisa-agent = "lisa_agent.main:main"
