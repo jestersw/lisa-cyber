@@ -10,6 +10,7 @@ import {
   type Diagnosis,
   type HeartbeatLog,
   type NextActivity,
+  type RunStatus,
 } from "../api/client";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -37,6 +38,9 @@ export function AgentDetail() {
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagnoseError, setDiagnoseError] = useState<string | null>(null);
+  const [run, setRun] = useState<RunStatus | null>(null);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!agentId) {
@@ -107,6 +111,18 @@ export function AgentDetail() {
             setDeployments([]);
           }
         });
+      endpoints
+        .runStatus(agentId)
+        .then((value) => {
+          if (active) {
+            setRun(value);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setRun(null);
+          }
+        });
     };
 
     load();
@@ -161,6 +177,18 @@ export function AgentDetail() {
     }
   };
 
+  const toggleRun = async () => {
+    setRunBusy(true);
+    setRunError(null);
+    try {
+      setRun(run?.running ? await endpoints.stopRun(agentId) : await endpoints.startRun(agentId));
+    } catch (err) {
+      setRunError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setRunBusy(false);
+    }
+  };
+
   const runDiagnose = async () => {
     setDiagnosing(true);
     setDiagnoseError(null);
@@ -198,6 +226,32 @@ export function AgentDetail() {
           )}
         </div>
       )}
+
+      <section className="run-panel">
+        <div className="diagnose-head">
+          <h2 className="section-title">Demo run</h2>
+          <button
+            className={`btn ${run?.running ? "danger" : "primary"}`}
+            onClick={toggleRun}
+            disabled={runBusy}
+          >
+            {runBusy ? "…" : run?.running ? "■ Stop" : "▶ Run agent"}
+          </button>
+        </div>
+        <p className="field-hint">
+          Launch this agent's activity from the panel — no terminal. The server simulates its
+          behaviour (opens apps, acts, idles, glances) so the{" "}
+          <Link to="/range">live range view</Link> lights up. For a real agent on a real host, use
+          the installer or “Deploy to hosts” below.
+        </p>
+        {runError && <div className="notice error">{runError}</div>}
+        <p className="page-sub">
+          <span className={`status ${run?.running ? "online" : "offline"}`}>
+            {run?.running ? "running" : "stopped"}
+          </span>
+          {run?.running && run.started_at ? `  ·  since ${formatTime(run.started_at)}` : ""}
+        </p>
+      </section>
 
       <section className="diagnose-panel">
         <div className="diagnose-head">

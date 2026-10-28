@@ -161,6 +161,11 @@ export interface Meta {
   buildable_os: string[];
 }
 
+export interface RunStatus {
+  running: boolean;
+  started_at: string | null;
+}
+
 export interface FleetAgent {
   agent_id: string;
   name: string;
@@ -347,6 +352,9 @@ export const endpoints = {
   deployAgent: (agentId: string, body: DeployRequest) =>
     api.post<Deployment>(`/api/agents/${agentId}/deploy`, body),
   diagnoseAgent: (agentId: string) => api.post<Diagnosis>(`/api/agents/${agentId}/diagnose`, {}),
+  runStatus: (agentId: string) => api.get<RunStatus>(`/api/agents/${agentId}/run`),
+  startRun: (agentId: string) => api.post<RunStatus>(`/api/agents/${agentId}/run`, {}),
+  stopRun: (agentId: string) => api.post<RunStatus>(`/api/agents/${agentId}/run/stop`, {}),
   generateAgent: (body: Record<string, unknown>) =>
     api.post<GenerateAgentResponse>("/api/agents/generate", body),
   generateTemplate: (body: Record<string, unknown>) =>

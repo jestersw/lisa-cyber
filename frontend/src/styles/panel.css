@@ -628,7 +628,8 @@
   word-break: break-word;
 }
 
-.diagnose-panel {
+.diagnose-panel,
+.run-panel {
   margin: 10px 0 18px;
   padding: 16px;
   border: 1px solid var(--border);

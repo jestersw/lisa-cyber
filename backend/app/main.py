@@ -18,6 +18,7 @@ from app.api.endpoints import (
     meta,
     ml,
     roles,
+    runner,
     templates,
 )
 from app.config import get_settings
@@ -64,6 +65,7 @@ app.include_router(deploy.router, prefix="/api", tags=["Deployment"], dependenci
 app.include_router(diagnose.router, prefix="/api", tags=["Diagnostics"], dependencies=_operator)
 app.include_router(meta.router, prefix="/api", tags=["Meta"], dependencies=_operator)
 app.include_router(live.router, prefix="/api", tags=["Live view"], dependencies=_operator)
+app.include_router(runner.router, prefix="/api", tags=["Demo run"], dependencies=_operator)
 
 # Mixed routers (agent token + operator): guarded per-route inside the module.
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
