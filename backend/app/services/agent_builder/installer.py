@@ -159,11 +159,7 @@ def _sh_write_package(pkg_path_expr: str, package_json: str) -> str:
     """POSIX-sh snippet writing the deployment package to `pkg_path_expr` (a
     shell expression, e.g. "$install_dir/package_<id>.json"). A quoted heredoc
     keeps the JSON byte-for-byte with no shell expansion of its contents."""
-    return (
-        f'cat > "{pkg_path_expr}" <<\'{_PKG_HEREDOC}\'\n'
-        f"{package_json}\n"
-        f"{_PKG_HEREDOC}"
-    )
+    return f"cat > \"{pkg_path_expr}\" <<'{_PKG_HEREDOC}'\n" f"{package_json}\n" f"{_PKG_HEREDOC}"
 
 
 def _sh_exports(*, backend_url: str, agent_token: str, pkg_path_expr: str) -> str:
