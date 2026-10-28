@@ -145,32 +145,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="block" id="careers">
-        <div className="sec-head">Careers</div>
-        <h2>We're a lean, self-funded, distributed team and we're always hiring.</h2>
-        <p>Help us build and explore new infrastructure to amplify the human spirit.</p>
-      </section>
-
-      <section className="block" id="contact">
-        <div className="sec-head">Contact</div>
-        <h2>Get in touch.</h2>
-        <div className="contact-lines">
-          <div>
-            For product questions and support, reach us on <b>Discord</b> or our{" "}
-            <b>help page</b>.
-          </div>
-          <div>
-            For billing support, email <b>billing@lisa.sim</b>
-          </div>
-          <div>
-            For journalistic inquiries: <b>press@lisa.sim</b>
-          </div>
-        </div>
-      </section>
-
       <footer className="landing-footer">
         <span>© 2026 Living Infrastructure Simulator Agent</span>
-        <span>Terms · Privacy · Settings</span>
       </footer>
     </div>
   );

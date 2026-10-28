@@ -1179,64 +1179,6 @@
     animation: none;
   }
 }
-/* ── "What's happening now" strip ────────────────────────────────────── */
-
-.now-strip {
-  list-style: none;
-  margin: var(--space-md) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.now-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px var(--space-md);
-  border: 1px solid rgba(1, 102, 156, 0.3);
-  border-radius: var(--radius-md);
-  background: rgba(1, 102, 156, 0.08);
-}
-
-.now-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: var(--accent-glow);
-  animation: pulse 2.4s ease-in-out infinite;
-  flex: none;
-}
-
-.now-agent {
-  color: var(--white);
-  font-family: var(--font-mono);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.now-agent:hover {
-  color: var(--accent);
-}
-
-.now-app {
-  color: var(--white);
-  font-weight: 500;
-}
-
-.now-doing {
-  color: var(--light);
-}
-
-.now-time {
-  margin-left: auto;
-  color: rgba(155, 186, 205, 0.6);
-  font-size: 12px;
-}
-
 /* ── Per-agent chain lanes ───────────────────────────────────────────── */
 
 .chains {
