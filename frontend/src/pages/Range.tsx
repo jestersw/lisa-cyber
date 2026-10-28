@@ -62,27 +62,6 @@ function detailOf(ev: LiveEvent): string | null {
   return null;
 }
 
-// A plain-language description of one event, for the "now" strip and tooltips.
-function describe(ev: LiveEvent): string {
-  const detail = detailOf(ev);
-  switch (ev.activity_type) {
-    case "app_open":
-      return `opened ${ev.app}`;
-    case "app_close":
-      return `closed ${ev.app}`;
-    case "network":
-      return `network request${detail ? ` → ${detail}` : ""}`;
-    case "file":
-      return `file ${detail ?? "activity"}`;
-    case "input":
-      return `typing in ${ev.app}`;
-    case "idle":
-      return "stepped away";
-    default:
-      return `${ev.activity_type} in ${ev.app}`;
-  }
-}
-
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
   for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
@@ -184,10 +163,8 @@ export function Range() {
   // to CHAIN_LEN per agent, then reverse to chronological for the lane. Order
   // lanes by most-recent activity so the busiest agents are on top.
   const byAgent = new Map<string, LiveEvent[]>();
-  const latestByAgent = new Map<string, LiveEvent>();
   for (const ev of events) {
     if (!ev.agent_id) continue;
-    if (!latestByAgent.has(ev.agent_id)) latestByAgent.set(ev.agent_id, ev);
     const list = byAgent.get(ev.agent_id);
     if (list) {
       if (list.length < CHAIN_LEN) list.push(ev);
@@ -199,12 +176,6 @@ export function Range() {
   const lanes = [...byAgent.entries()]
     .sort((a, b) => (b[1][0]?.id ?? 0) - (a[1][0]?.id ?? 0))
     .map(([id, list]) => ({ id, agent: fleetById.get(id) ?? null, chain: [...list].reverse() }));
-
-  // "What's happening now": the latest event per online agent, so the operator
-  // can read the current state as a sentence instead of decoding the chain.
-  const nowRows = fleet
-    .filter((a) => isFresh(a.last_seen))
-    .map((a) => ({ agent: a, last: latestByAgent.get(a.agent_id) ?? null }));
 
   const online = fleet.filter((a) => isFresh(a.last_seen)).length;
 
@@ -251,25 +222,6 @@ export function Range() {
             );
           })}
         </div>
-      )}
-
-      <h2 className="section-title">What's happening now</h2>
-      {nowRows.length === 0 ? (
-        <p className="empty">No agent is active right now.</p>
-      ) : (
-        <ul className="now-strip">
-          {nowRows.map(({ agent, last }) => (
-            <li className="now-row" key={agent.agent_id}>
-              <span className="now-dot" />
-              <Link to={`/agents/${agent.agent_id}`} className="now-agent">
-                {agent.agent_id}
-              </Link>
-              <span className="now-app">{agent.current_app ?? last?.app ?? "idle"}</span>
-              <span className="now-doing">{last ? describe(last) : "waiting…"}</span>
-              {last?.timestamp && <span className="now-time mono">{clock(last.timestamp)}</span>}
-            </li>
-          ))}
-        </ul>
       )}
 
       <h2 className="section-title">Activity chains</h2>
