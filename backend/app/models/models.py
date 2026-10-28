@@ -147,6 +147,20 @@ class Deployment(Base):
     finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, default=None)
 
 
+class Host(Base):
+    """A reusable deployment target in the range, saved by the operator so hosts
+    don't have to be retyped on every deploy."""
+
+    __tablename__ = "hosts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    label: Mapped[str] = mapped_column(String(100))
+    address: Mapped[str] = mapped_column(String(253), unique=True)
+    ssh_user: Mapped[str | None] = mapped_column(String(64), default=None)
+    os_type: Mapped[str | None] = mapped_column(String(20), default=None)
+    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, server_default=func.now())
+
+
 class ActivityEvent(Base):
     __tablename__ = "activity_events"
 

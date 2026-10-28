@@ -8,6 +8,7 @@ import { AgentList } from "./pages/AgentList";
 import { ApplicationPlugins } from "./pages/ApplicationPlugins";
 import { BehaviorTemplates } from "./pages/BehaviorTemplates";
 import { Dashboard } from "./pages/Dashboard";
+import { Hosts } from "./pages/Hosts";
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
 import { MlStatus } from "./pages/MlStatus";
@@ -39,6 +40,7 @@ export function App() {
           <Route path="/agents/create" element={<AgentCreate />} />
           <Route path="/agents/:agentId" element={<AgentDetail />} />
           <Route path="/roles" element={<Roles />} />
+          <Route path="/hosts" element={<Hosts />} />
           <Route path="/behavior-templates" element={<BehaviorTemplates />} />
           <Route path="/application-plugins" element={<ApplicationPlugins />} />
           <Route path="/model" element={<MlStatus />} />

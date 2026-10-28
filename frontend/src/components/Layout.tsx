@@ -7,6 +7,7 @@ const links = [
   { to: "/agents", label: "Agents" },
   { to: "/agents/create", label: "New agent" },
   { to: "/roles", label: "Roles" },
+  { to: "/hosts", label: "Hosts" },
   { to: "/behavior-templates", label: "Templates" },
   { to: "/application-plugins", label: "Plugins" },
   { to: "/model", label: "Model" },

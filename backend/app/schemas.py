@@ -365,6 +365,23 @@ class PluginGenerationResponse(BaseModel):
     source: str
 
 
+class HostCreate(StrictInput):
+    label: str = Field(min_length=1, max_length=100)
+    address: str = Field(min_length=1, max_length=253, pattern=r"^[A-Za-z0-9._-]+$")
+    ssh_user: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    os_type: OSType | None = None
+
+
+class HostResponse(BaseModel):
+    id: int
+    label: str
+    address: str
+    ssh_user: str | None = None
+    os_type: str | None = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DeployTarget(BaseModel):
     # Hostname or IP ansible connects to over SSH. Validated to a conservative
     # charset so it can be written into an inventory file without surprises.
