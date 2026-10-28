@@ -1,0 +1,61 @@
+name: build-installer
+
+# On-demand agent installer build (#234 follow-up). Nuitka can't cross-compile,
+# so each OS builds on its own runner. Produces a downloadable installer artefact
+# for an OS the always-on backend can't build itself (macOS/Windows) — the
+# operator then uploads it to the panel's build storage.
+#
+# Run it: Actions -> build-installer -> Run workflow, or
+#   gh workflow run build-installer.yml -f os_type=windows -f agent_id=USR123 \
+#       -f backend_url=https://range.example.com
+on:
+  workflow_dispatch:
+    inputs:
+      os_type:
+        description: Target OS (must build on its own runner)
+        type: choice
+        options: [windows, macos, linux]
+        default: windows
+      agent_id:
+        description: Agent id baked into the installer
+        required: true
+      backend_url:
+        description: Backend URL the installed agent phones home to
+        required: true
+        default: https://example.com
+      apps:
+        description: Comma-separated application names (optional)
+        required: false
+        default: ""
+      agent_token:
+        description: Enrollment token to bake (optional)
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os_type == 'windows' && 'windows-latest' || (inputs.os_type == 'macos' && 'macos-latest' || 'ubuntu-latest') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build + agent deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -e agent nuitka
+      - name: Build installer
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          AGENT_ID: ${{ inputs.agent_id }}
+          OS_TYPE: ${{ inputs.os_type }}
+          BACKEND_URL: ${{ inputs.backend_url }}
+          APPS: ${{ inputs.apps }}
+          AGENT_TOKEN: ${{ inputs.agent_token }}
+        run: python scripts/build_installer_artifact.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ inputs.os_type }}-${{ inputs.agent_id }}
+          path: dist/installer_*
+          if-no-files-found: error
