@@ -42,6 +42,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       AGENT_TOKEN: ${AGENT_TOKEN:-}
       BUILDABLE_OS: ${BUILDABLE_OS:-["linux"]}
+      # Where the deploy service finds the committed Ansible playbook (mounted
+      # below). With ansible-core in the image, "Deploy to hosts" runs for real.
+      LISA_ANSIBLE_DIR: /opt/lisa/ansible
     ports:
       - "8000:8000"
     volumes:
@@ -50,6 +53,12 @@ services:
       # worker (macOS/Windows) can share it — set LISA_BUILDS_DIR to the same
       # path when running such a worker. Defaults to ./.builds in the repo.
       - ${LISA_BUILDS_DIR:-./.builds}:/var/lisa/builds
+      # The deployment playbook/role, read-only, so the panel's "Deploy to
+      # hosts" can run ansible-playbook against your target machines.
+      - ./deploy/ansible:/opt/lisa/ansible:ro
+      # To deploy over SSH, give the backend a key that can reach your hosts,
+      # e.g. uncomment and point at your key:
+      # - ${LISA_SSH_KEY:-~/.ssh/id_ed25519}:/root/.ssh/id_ed25519:ro
     depends_on:
       postgres:
         condition: service_healthy

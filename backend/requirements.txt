@@ -7,3 +7,7 @@ pydantic-settings==2.16.0
 alembic==1.18.5
 redis==8.1.0
 PyJWT==2.10.1
+# Deployment orchestration (#212): the backend shells out to ansible-playbook
+# to push agents onto target hosts. ansible-core ships ansible-playbook and the
+# builtin modules the lisa_agent role uses.
+ansible-core==2.18.6

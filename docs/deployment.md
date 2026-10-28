@@ -237,12 +237,17 @@ Both routes require an operator token.
 **Backend requirements.** Panel deployment runs `ansible-playbook` on the
 backend host, so that host needs `ansible-playbook` on `PATH`, the committed
 `deploy/ansible/` tree (set `LISA_ANSIBLE_DIR` if it isn't at the repo's default
-location), and SSH reachability to the targets. The stock backend image stays
-lean and ships **without** ansible; where it isn't installed, a deployment is
-recorded as `unavailable` with a message pointing back to the committed
-playbook, rather than failing silently. Run the backend on a host (or sidecar)
-with ansible installed to enable panel deployment, or keep using the committed
-playbook directly (above).
+location), and SSH reachability to the targets.
+
+The stock `docker compose` backend now ships this out of the box: the image
+includes `ansible-core` (and an SSH client), and compose mounts
+`deploy/ansible` at `/opt/lisa/ansible` with `LISA_ANSIBLE_DIR` pointed at it.
+The one thing you must provide is **SSH access to your hosts** — give the
+backend container a key that can reach them (see the commented
+`~/.ssh/...:/root/.ssh/...` mount in `docker-compose.yml`) or run the backend
+somewhere that already has one. Where ansible or the playbook is genuinely
+absent, a deployment is recorded as `unavailable` (with a message) rather than
+failing silently.
 
 ---
 
