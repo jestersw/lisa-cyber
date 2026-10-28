@@ -322,6 +322,8 @@ def test_macos_header_delivers_config(tmp_path):
     # The package itself is written next to the binary via a quoted here-doc.
     assert "package_USR001.json" in header
     assert _SAMPLE_PKG in header
+    # The uninstaller removes the dropped package too.
+    assert 'rm -f "$plist" "$agent_path" "$uninstall" "$pkg_path"' in header
     assert _sh_syntax_ok(header, tmp_path)
 
 
@@ -377,6 +379,8 @@ def test_windows_header_delivers_config(tmp_path):
     assert _SAMPLE_PKG in header
     # The uninstaller clears the vars; $null must survive as a literal (backtick).
     assert "`$null" in header
+    # ...and removes the dropped package.
+    assert 'Remove-Item -Force -ErrorAction SilentlyContinue -Path "$pkgPath"' in header
 
 
 def test_running_installer_drops_package_beside_binary(tmp_path):

@@ -289,8 +289,10 @@ def _macos_header(
     pkg_var = ""
     pkg_setup = ""
     env_block = ""
+    uninstall_pkg = ""
     if package_json:
         pkg_var = f'\npkg_path="$app_support/package_{agent_id}.json"'
+        uninstall_pkg = ' "$pkg_path"'
         pkg_setup = (
             "\n# Deployment package the LaunchAgent points LISA_PACKAGE_PATH at.\n"
             f"{_sh_write_package('$pkg_path', package_json)}\n"
@@ -351,7 +353,7 @@ PLIST
 cat > "$uninstall" <<UNINSTALL
 #!/bin/sh
 launchctl unload "$plist" 2>/dev/null || true
-rm -f "$plist" "$agent_path" "$uninstall"
+rm -f "$plist" "$agent_path" "$uninstall"{uninstall_pkg}
 UNINSTALL
 chmod +x "$uninstall"
 
@@ -411,6 +413,7 @@ $uninstallBody = @"
 schtasks.exe /Delete /TN "$taskName" /F 2>`$null
 Get-Process -Name "$procName" -ErrorAction SilentlyContinue | Stop-Process -Force
 __UNINSTALL_ENV__Remove-Item -Force -ErrorAction SilentlyContinue -Path "$agentExe","$uninstall"
+__UNINSTALL_PKG__
 "@
 Set-Content -Path $uninstall -Value $uninstallBody -Encoding UTF8
 
@@ -462,7 +465,9 @@ def _windows_header(
     # .\package.json in the task's cwd and exit. The uninstaller clears the vars.
     config = ""
     uninstall_env = ""
+    uninstall_pkg = ""
     if package_json:
+        uninstall_pkg = 'Remove-Item -Force -ErrorAction SilentlyContinue -Path "$pkgPath"'
         url = _ps_single_quote(backend_url)
         token = _ps_single_quote(agent_token)
         set_lines = [
@@ -493,6 +498,7 @@ def _windows_header(
         .replace("__TASK_NAME__", task_name)
         .replace("__CONFIG__", config)
         .replace("__UNINSTALL_ENV__", uninstall_env)
+        .replace("__UNINSTALL_PKG__", uninstall_pkg)
         .replace("__PAYLOAD_B64__", payload_b64)
     )
 
