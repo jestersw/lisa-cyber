@@ -1,0 +1,69 @@
+name: dependabot-auto-merge
+
+# Auto-merge green, non-major Dependabot PRs. We can't use GitHub's native
+# `--auto` here because that only gates on *required* status checks, and our CI
+# is path-filtered (making those checks required would wedge unrelated PRs whose
+# path-filtered workflow never runs). Instead we wait, after each CI workflow
+# finishes, until the PR is fully green + mergeable (mergeStateStatus == CLEAN)
+# and then merge — so a red or conflicting PR is never merged.
+on:
+  workflow_run:
+    workflows: [backend, frontend, agent, ml, security]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    # Only for Dependabot PRs whose CI run just succeeded.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Merge when green and not a major bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+
+          pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
+                 --json number,title,author --jq '.[0] // empty')
+          if [ -z "$pr" ]; then echo "no open PR for $BRANCH"; exit 0; fi
+          num=$(echo "$pr" | jq -r .number)
+          title=$(echo "$pr" | jq -r .title)
+          author=$(echo "$pr" | jq -r .author.login)
+          if [ "$author" != "dependabot[bot]" ]; then echo "not dependabot"; exit 0; fi
+
+          # Skip major bumps ("... from X[.y.z] to Y[.y.z] ..."): first version
+          # component differing means a major, which deserves manual review.
+          # A grouped PR has no "from/to" and is minor/patch by config, so it
+          # falls through and is eligible.
+          from=$(echo "$title" | sed -nE 's/.*from ([0-9][0-9.]*) to .*/\1/p')
+          to=$(echo "$title" | sed -nE 's/.* to ([0-9][0-9.]*).*/\1/p')
+          if [ -n "$from" ] && [ -n "$to" ] && [ "${from%%.*}" != "${to%%.*}" ]; then
+            echo "major bump (${from} -> ${to}); leaving #$num for manual review"
+            exit 0
+          fi
+
+          # Wait until every check is green and the PR is mergeable. Another CI
+          # workflow may still be running; CLEAN means all of them passed.
+          for _ in $(seq 1 30); do
+            s=$(gh pr view "$num" --repo "$REPO" --json mergeStateStatus --jq .mergeStateStatus)
+            echo "mergeStateStatus=$s"
+            case "$s" in
+              CLEAN) break ;;
+              DIRTY|BEHIND) echo "not auto-mergeable ($s); skipping"; exit 0 ;;
+              *) sleep 10 ;;
+            esac
+          done
+          s=$(gh pr view "$num" --repo "$REPO" --json mergeStateStatus --jq .mergeStateStatus)
+          if [ "$s" != "CLEAN" ]; then echo "still $s after wait; skipping"; exit 0; fi
+
+          echo "merging #$num ($title)"
+          gh pr merge "$num" --repo "$REPO" --merge --delete-branch
