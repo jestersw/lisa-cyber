@@ -1,17 +1,35 @@
 version: 2
+# Grouped updates: minor + patch bumps for each ecosystem land in ONE PR instead
+# of one-per-dependency, to cut PR noise. Major bumps stay ungrouped (individual
+# PRs) so they get reviewed on their own.
 updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
+    groups:
+      backend:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: pip
     directory: /agent
     schedule:
       interval: weekly
+    groups:
+      agent:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: pip
     directory: /ml
     schedule:
       interval: weekly
+    groups:
+      ml:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: npm
     directory: /frontend
     schedule:
@@ -23,7 +41,15 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      frontend:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
