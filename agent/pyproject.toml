@@ -10,7 +10,7 @@ dynamic = ["dependencies"]
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.4",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
 ]
 
 [tool.setuptools.dynamic]
