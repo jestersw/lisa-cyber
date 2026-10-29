@@ -2,5 +2,5 @@ pytest==8.3.4
 httpx==0.28.1
 ruff==0.17.2
 mypy==1.14.0
-fakeredis==2.37.0
+fakeredis==2.40.0
 types-redis==4.6.0.20241004
