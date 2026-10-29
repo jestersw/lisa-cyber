@@ -54,7 +54,7 @@ jobs:
           APPS: ${{ inputs.apps }}
           AGENT_TOKEN: ${{ inputs.agent_token }}
         run: python scripts/build_installer_artifact.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ inputs.os_type }}-${{ inputs.agent_id }}
           path: dist/installer_*
