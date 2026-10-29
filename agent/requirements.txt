@@ -4,4 +4,4 @@
 # install it into the Nuitka build environment so these packages are actually
 # bundled into the compiled agent. Keep runtime deps here (dev-only deps stay
 # in pyproject's optional "dev" extra).
-requests==2.32.3
+requests==2.34.2
